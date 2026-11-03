@@ -71,7 +71,7 @@ Use a session when the evidence has to be saved with marks or a browser timeline
 
 ## Production
 
-When the bug only happens in production, do not instrument or deploy anything. Record the production page and add a console probe the user pastes: [references/production.md](references/production.md).
+When the bug only happens in production, do not instrument or deploy anything. By default, start a session without a browser. The user tests in their own browser and pastes a probe in the DevTools console that sends network, errors, console warnings, navigation and the diagnostic's state to the endpoint: [references/production.md](references/production.md).
 
 ## Final answer
 

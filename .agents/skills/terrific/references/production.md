@@ -1,75 +1,118 @@
 # Debugging production
 
-Use this when the bug only happens in production, or depends on production data, config or a deployed build. Production code is never instrumented, and nothing is deployed for the investigation. Evidence comes from three sources:
+Use this when the bug only happens in production, or depends on production data, config or a deployed build. Production code is never instrumented, and nothing is deployed for the investigation.
 
-- a recorded browser session;
-- a console probe that the user pastes, in that window or in their own browser;
-- optionally, the platform's log stream.
+By default, the user tests in their own browser, with their normal login and extensions. You open a session without a browser, and write a probe that the user pastes in the DevTools console. The probe sends the page's telemetry to the session's endpoint. terrific records no browser here, so the probe has to carry everything the evidence needs.
 
 ## Rules
 
 - Read only. The probe never calls write endpoints, changes state, or clicks for the user.
-- Never print or send tokens, cookies, storage values, authorization headers, or user data. Log key names, ids, counts, booleans, statuses and durations.
+- Never send tokens, cookies, storage values, request or response bodies, query strings, headers, or user data.
+- Send methods, hosts, paths with ids masked, statuses, durations, error names, booleans and counts.
 - Prefer a test account. Real users' data stays out of notes and probes.
-- Before the user pastes a probe, say in one line what it watches.
-- Fix locally, with the production evidence as the reason. Verify after the deploy, in a new session.
+- Before the user pastes a probe, say in one line what it captures.
+- Fix locally, with the production evidence as the reason. Verify after the deploy, in a new session with the same probe.
 
-## 1. Record the production page
+## 1. Start a session without a browser
 
 ```sh
 terrific ingest up tck-142
-terrific start https://app.example.com/path "prod invite link" @prod-tester #tck-142
+terrific start "prod invite link" #tck-142 --no-browser
 ```
 
-- The session records network (with bodies at `--at`), console, actions and navigation, without touching the code. This is often enough on its own.
-- If the flow needs a login, create a profile and let the user log in first ([profiles.md](profiles.md)). Use `snapshot` for a fixed test user.
-- Ask the user to reproduce in that window, then stop and read the evidence as usual.
+Put the endpoint URL that `ingest up` printed into the probe.
 
-## 2. Console probe
+## 2. The probe
 
-When the network and console are not enough, write a probe for state the page does not log, such as:
+The base captures, for any diagnostic:
 
-- DOM state;
-- event order (focus, visibility, auth events);
-- which storage keys exist;
-- globals the app exposes.
+- `fetch` and XHR requests;
+- uncaught errors and unhandled rejections;
+- `console.error` and `console.warn`;
+- SPA navigation;
+- tab visibility.
 
-The user pastes the probe in the DevTools console. It reaches terrific through one of two channels:
-
-| Channel | Where the user pastes | Session | Probe sends with |
-|---|---|---|---|
-| Console | The terrific window | Browser session (step 1) | `console.info('[terrific]', JSON.stringify(...))`, recorded as console events |
-| Ingest | The user's own browser, already logged in | `terrific start "prod probe" #tck-142 --no-browser` | `fetch` to the endpoint URL |
-
-- **Console** needs nothing from the browser. Always use `JSON.stringify`, because objects logged directly are recorded shortened, as `{a: 1, b: Array(2)}`.
-- **Ingest** suits a bug that needs the user's real browser, extensions or login. A public page posting to 127.0.0.1 can be stopped in three places:
-  - An ad blocker answers `net::ERR_BLOCKED_BY_CLIENT`. The user disables it for the site, or uses a window without extensions.
-  - Chrome's [Local Network Access](https://developer.chrome.com/blog/local-network-access) may ask the user for permission.
-  - The site's CSP `connect-src` may refuse it.
-  - The probe reports the first answer in the console (`ingest answered 202` or `ingest blocked`). Check that line before asking for the reproduction.
-
-Template, adapted per diagnostic. Set `URL` to the endpoint for the ingest channel, or to `null` for the console channel:
+Add the hooks for the current diagnostic where the template marks them, such as DOM state, auth events, or a global the app exposes. Log only on change.
 
 ```js
-// terrific probe: paste in the DevTools console
+// terrific probe: paste in the DevTools console of the page under test
 (() => {
-  const URL = null; // or 'INGEST_URL'
-  const slug = 'overlay-on-tab-switch';
+  const ENDPOINT = 'INGEST_URL'; // null in the terrific window, which already records network and console
+  const slug = 'invite-link-expired';
+  const MAX = 500;
+  const send = window.fetch.bind(window);
+  let count = 0;
   let reported = false;
   const report = (text) => { if (!reported) { reported = true; console.info('[terrific]', text); } };
-  const t = (message, data = {}) => {
-    const body = JSON.stringify({ message, diagnosticSlug: slug, source: 'devtools probe', timestamp: Date.now(), data });
-    if (URL === null) return console.info('[terrific]', body);
-    fetch(URL, { method: 'POST', body })
+  const clean = (url) => {
+    try {
+      const u = new URL(url, location.href);
+      return u.host + u.pathname
+        .replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ':id')
+        .replace(/\/\d{4,}(?=\/|$)/g, '/:n');
+    } catch { return 'invalid url'; }
+  };
+  const t = (message, data = {}, level = 'info') => {
+    if (count++ >= MAX) return;
+    const body = JSON.stringify({ message, diagnosticSlug: slug, source: 'devtools probe', level, timestamp: Date.now(), data });
+    if (ENDPOINT === null) return console.info('[terrific]', body);
+    send(ENDPOINT, { method: 'POST', body, keepalive: true })
       .then((r) => report(`ingest answered ${r.status}`))
       .catch((e) => report(`ingest blocked ${e.name} ${e.message}`));
   };
   const undo = [];
-  const on = (target, type, fn) => {
-    target.addEventListener(type, fn);
-    undo.push(() => target.removeEventListener(type, fn));
-  };
+  const patch = (obj, key, wrap) => { const orig = obj[key]; obj[key] = wrap(orig); undo.push(() => { obj[key] = orig; }); };
+  const on = (target, type, fn) => { target.addEventListener(type, fn); undo.push(() => target.removeEventListener(type, fn)); };
+  const ms = (started) => Math.round(performance.now() - started);
+
+  if (ENDPOINT !== null) {
+    patch(window, 'fetch', (orig) => async function (input, init) {
+      const url = clean(input instanceof Request ? input.url : String(input));
+      const method = String(init?.method ?? (input instanceof Request ? input.method : 'GET')).toUpperCase();
+      const started = performance.now();
+      try {
+        const res = await orig.call(window, input, init);
+        t('fetch', { method, url, status: res.status, ms: ms(started) }, res.ok ? 'info' : 'warn');
+        return res;
+      } catch (error) {
+        t('fetch failed', { method, url, error: error?.name ?? 'Error', ms: ms(started) }, 'error');
+        throw error;
+      }
+    });
+    patch(XMLHttpRequest.prototype, 'open', (orig) => function (method, url, ...rest) {
+      this.__terrific = { method: String(method).toUpperCase(), url: clean(String(url)) };
+      return orig.call(this, method, url, ...rest);
+    });
+    patch(XMLHttpRequest.prototype, 'send', (orig) => function (...args) {
+      const info = this.__terrific;
+      const started = performance.now();
+      if (info !== undefined) {
+        this.addEventListener('loadend', () => {
+          const bad = this.status === 0 || this.status >= 400;
+          t('xhr', { ...info, status: this.status, ms: ms(started) }, bad ? 'warn' : 'info');
+        }, { once: true });
+      }
+      return orig.apply(this, args);
+    });
+    on(window, 'error', (e) => t('error', { name: e.error?.name ?? 'Error', message: String(e.message).slice(0, 200), at: `${clean(e.filename || location.href)}:${e.lineno}` }, 'error'));
+    on(window, 'unhandledrejection', (e) => t('unhandled rejection', { name: e.reason?.name ?? typeof e.reason, message: String(e.reason?.message ?? e.reason).slice(0, 200) }, 'error'));
+    for (const level of ['error', 'warn']) {
+      patch(console, level, (orig) => function (...args) {
+        const text = args.map((a) => (typeof a === 'string' ? a : (a?.name ?? typeof a))).join(' ').slice(0, 200);
+        t(`console.${level}`, { text }, level);
+        return orig.apply(this, args);
+      });
+    }
+    const nav = (how) => t('navigation', { how, path: clean(location.href) });
+    for (const key of ['pushState', 'replaceState']) {
+      patch(history, key, (orig) => function (...args) { const r = orig.apply(this, args); nav(key); return r; });
+    }
+    on(window, 'popstate', () => nav('popstate'));
+  }
+
   on(document, 'visibilitychange', () => t('visibility', { state: document.visibilityState }));
+
+  // Diagnostic hooks. Example: whether a dialog is open.
   let open;
   const watch = new MutationObserver(() => {
     const dialog = document.querySelector('[role="dialog"]');
@@ -79,38 +122,59 @@ Template, adapted per diagnostic. Set `URL` to the endpoint for the ingest chann
   });
   watch.observe(document.body, { childList: true, subtree: true });
   undo.push(() => watch.disconnect());
-  window.__terrificUndo = () => { undo.forEach((fn) => fn()); t('probe removed'); };
+
+  window.__terrificUndo = () => { undo.reverse().forEach((fn) => fn()); t('probe removed'); };
   // Key names can carry user and record ids, so only their prefixes.
   const storage = [...new Set(Object.keys(localStorage).map((key) => key.split(':')[0]))];
-  t('probe installed', { path: location.pathname, storage });
+  t('probe installed', { path: clean(location.href), storage });
 })();
 ```
 
-- Log only on change, never on every mutation or frame.
-- To time a function the app exposes, wrap it and log its duration and outcome, never its arguments.
-- Paths and key names can carry ids. Send prefixes or counts unless the id is the evidence.
+- `MAX` caps the events, so a loop in the app cannot flood the endpoint.
+- Console text is cut to 200 characters. If the app logs user data, drop `text` and keep the level.
+- Requests made before the paste are missed. Ask the user to paste first, then reproduce from the start of the flow.
+- To time a function the app exposes, wrap it with `patch` and log its duration and outcome, never its arguments.
 
-Steps for the user:
+## 3. Steps for the user
 
-1. Press F12 and open Console. The first time, Chrome may ask them to type `allow pasting`.
-2. Paste the probe, press Enter, and check for `probe installed` (console channel) or `ingest answered 202` (ingest channel).
-3. Reproduce, and say when they are done.
+1. Open the production page in their normal browser, logged in as they would test.
+2. Press F12 and open Console. The first time, Chrome may ask them to type `allow pasting`.
+3. Paste the probe and press Enter.
+4. Check that the console shows `[terrific] ingest answered 202`.
+5. Reproduce, and say when they are done.
 
-A reload drops the probe. If the reproduction needs a reload or navigates to a full page, the user has two options:
+If the console shows `ingest blocked` instead, something between the page and 127.0.0.1 refused the request:
 
-- paste it again after each load;
-- save it in Sources, then Snippets, and run it from there.
+| Cause | Sign | Fix |
+|---|---|---|
+| Ad blocker or privacy extension | `net::ERR_BLOCKED_BY_CLIENT` | Disable it for the site, then paste again |
+| Chrome's [Local Network Access](https://developer.chrome.com/blog/local-network-access) | A permission prompt, or a block after denying it | Allow it for the site |
+| The site's CSP `connect-src` | A CSP violation in the console | Use the terrific window (section 5) |
 
-To remove the probe without a reload, run `__terrificUndo()`.
+A reload or a full-page navigation drops the probe. The user can paste it again after each load, or save it in Sources, then Snippets, and run it from there. `__terrificUndo()` removes it without a reload.
 
-Read the probe's events with `--json`, because the text output leaves out `data`:
+## 4. Read the evidence
 
 ```sh
-terrific events <id> --type console --json   # console channel
-terrific events <id> --type ingest --json    # ingest channel
+terrific stop <id>
+terrific events <id> --type ingest --json
 ```
 
-## 3. Backend logs (optional)
+Use `--json`, because the text output leaves out `data`. `level` separates the noise: `error` and `warn` are failed requests, errors and console warnings, and `terrific events <id> --type errors` lists the `error` ones.
+
+## 5. Alternative: the terrific window
+
+Use a browser session when the ingest channel is blocked and cannot be unblocked, or when a timeline of the user's clicks and typing matters.
+
+```sh
+terrific start https://app.example.com/path "prod invite link" @prod-tester #tck-142
+```
+
+- terrific records network (with bodies at `--at`), console, actions and navigation by itself. That is often enough without a probe.
+- If the flow needs a login, create a profile and let the user log in first ([profiles.md](profiles.md)). Use `snapshot` for a fixed test user.
+- For state the page does not log, use the same probe with `ENDPOINT = null`. It then writes `console.info('[terrific]', ...)` lines, which the session records, and skips the network and console wrappers. Read them with `terrific events <id> --type console --json`.
+
+## 6. Backend logs (optional)
 
 If the platform streams logs, forward them into the endpoint so they land in the same session timeline. For example, `wrangler tail <worker> --format pretty` for Cloudflare Workers.
 
