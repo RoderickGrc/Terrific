@@ -89,6 +89,12 @@ test('sessionStats folds network, excludes lifecycle from total, and orders page
   deepEqual(stats.errorTimes, [15, 16, 17]);
 });
 
+test('sessionStats counts a typed start URL and the page it loads as one page', () => {
+  const navigation = { id: 'n', seq: 1, at: '', t: 1, kind: 'navigation', url: 'https://a.test/' };
+  const stats = sessionStats([navigation as TerrificEvent], { initialUrl: 'https://a.test' });
+  deepEqual(stats.pages, ['https://a.test']);
+});
+
 test('verdictLine uses singular, plural, and omits zero parts', () => {
   const empty = sessionStats([]);
   equal(verdictLine(empty), 'Nothing reported, no errors');

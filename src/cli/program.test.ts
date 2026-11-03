@@ -242,7 +242,7 @@ test('agent flow: no-browser session, marks, ingest, events, stop, show, prompt'
   const stopped = captureIo(cwd, env);
   equalExit(await runCli(argv('stop', '--name', 'renamed'), stopped), 0);
   match(stopped.out, /1 bug to review/);
-  match(stopped.out, /Same setup {2}\/new renamed #app --no-browser/);
+  match(stopped.out, /Same setup {2}\/new #app --no-browser/);
 
   const shown = captureIo(cwd, env);
   equalExit(await runCli(argv('show', id, '--json'), shown), 0);

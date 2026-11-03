@@ -107,7 +107,7 @@ export function renderSummary(detail: SessionDetail): string {
   if (where !== null) groups.push(where);
   groups.push(filesGroup(detail));
   if (!detail.legacy) {
-    groups.push(`Same setup  ${formatNewCommand(detail.setup, detail.name ?? '')}`);
+    groups.push(`Same setup  ${formatNewCommand(detail.setup, '')}`);
   }
   return `${groups.join('\n\n')}\n`;
 }

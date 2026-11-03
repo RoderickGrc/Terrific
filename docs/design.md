@@ -46,7 +46,7 @@ Launched with `terrific-cli` in any directory. The working directory is the proj
 These come from the design reviews and apply to every screen and to the non-interactive CLI.
 
 1. **Commands first.** No screen assumes what the next input is. Home and summary wait for a command; plain text only means something where it cannot be ambiguous (a note while recording). A pasted URL on home becomes `/new <url>` in the input, so the parser shows what it understood; it never starts anything by itself.
-2. **Only require what the action cannot do without.** A session does not need a URL (empty tab) or even a browser. Bugs and flags do not need text. Names are optional. Notes are the exception, because an empty note says nothing.
+2. **Only require what the action cannot do without.** A session does not need a URL (empty tab) or even a browser. Bugs and flags do not need text. Names are optional: a session started without one is named after its local start time and its page (or endpoint), for example `2026-11-03 08:22 haiku.ac`. Notes are the exception, because an empty note says nothing.
 3. **Say it in one line, confirm in one key.** Everything a session needs fits in `/new …`, the parser shows how each part is read while typing, and Enter opens a confirmation that a second Enter accepts. Defaults come from the last setup.
 4. **One key, one meaning, everywhere.** Enter confirms or starts, Esc backs out one level (panel, inspection, input, then summary to home), arrows move, Space toggles, Tab completes, Ctrl+C twice quits.
 5. **Colors carry meaning, shared with terrific web.** Event types use the exact colors of terrific web, only on the type tag and on markers. The interface itself stays in the anygent grey scale with the lavender accent for focus and selection. Red and amber are reserved for bugs, flags, errors and warnings.
@@ -69,7 +69,7 @@ These come from the design reviews and apply to every screen and to the non-inte
   4. **Where it went.** Pages as a path (`localhost:5173/ → localhost:5173/today`) and the ingest endpoint with its current state.
   5. **Files.** Context size and approximate tokens, and the folder, shortened in the middle so the session folder stays visible.
   
-  Then `/copy`, `/export` and `/new`. The status line shows the `/new` line that recreates the same setup, for example `/new localhost:5173/ "pooling interval check" @testing #app`. Esc goes back to home.
+  Then `/copy`, `/export` and `/new`. The status line shows the `/new` line that recreates the same setup without the name, for example `/new localhost:5173/ @testing #app`. Esc goes back to home.
 - **Detached.** Ctrl+C twice leaves the TUI. The shell prints any session still recording and the endpoints still open, with the commands to come back or stop them.
 
 ### `/new` grammar and live assistant

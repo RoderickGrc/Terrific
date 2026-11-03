@@ -240,5 +240,5 @@ export function summaryLines(view: View, summary: SummaryState): Line[] {
 
 export function sameSetup(detail: SessionDetail): string {
   if (detail.legacy) return 'Legacy session, read in place';
-  return `Same setup: ${formatNewCommand(detail.setup, detail.name ?? '')}`;
+  return `Same setup: ${formatNewCommand(detail.setup, '')}`;
 }

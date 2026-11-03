@@ -99,7 +99,7 @@ test('renderSummary prints the grouped stop/show text', () => {
   );
   match(text, /context {2}14\.1 KB {2}~3\.6k tokens/);
   match(text, /folder {3}/);
-  match(text, /Same setup {2}\/new localhost:5173\/ "login check" @clean #app\n$/);
+  match(text, /Same setup {2}\/new localhost:5173\/ @clean #app\n$/);
 });
 
 test('renderSummary omits To review and Same setup when they do not apply', () => {

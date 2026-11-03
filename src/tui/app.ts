@@ -1,8 +1,10 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { type Component, type Focusable, Key, matchesKey } from '@earendil-works/pi-tui';
 import type { DaemonClient } from '../client/daemon-client.ts';
 import {
   MAX_EVENT_LIMIT,
   type ProjectSettingsView,
+  type SessionDetail,
   type SessionView,
   type SettingsPatchRequest,
 } from '../core/api.ts';
@@ -90,6 +92,8 @@ const CTRL_C_MS = 3000;
 const REFRESH_MS = 5000;
 const ENDPOINT_BACKLOG = 50;
 const STOP_STATES = new Set(['stopped', 'interrupted', 'browser-closed']);
+const STOP_WAIT_MS = 5000;
+const STOP_POLL_MS = 100;
 const EDITOR_ROWS = 4;
 const FOOTER_ROWS = 3;
 const MIN_BODY_ROWS = 2;
@@ -575,13 +579,24 @@ export class TuiApp implements Component, Focusable {
     this.sessionStream?.abort();
     const watching = state.screen === 'live';
     if (state.overlay?.type === 'stop') this.closeOverlay();
-    const detail = await this.deps.client.getSession(sessionId);
+    const detail = await this.stoppedDetail(sessionId);
     await this.refreshLists();
     if (watching) {
       state.summary = { detail, blocks: [], scroll: 0 };
       state.screen = 'summary';
     }
     if (note !== null) this.toast('info', watching ? note : `${note}: ${detail.name ?? detail.id}`);
+  }
+
+  // The daemon streams the stop event before it marks the session stopped and writes its context file.
+  private async stoppedDetail(id: string): Promise<SessionDetail> {
+    const deadline = Date.now() + STOP_WAIT_MS;
+    let detail = await this.deps.client.getSession(id);
+    while (detail.status === 'recording' && Date.now() < deadline) {
+      await delay(STOP_POLL_MS);
+      detail = await this.deps.client.getSession(id);
+    }
+    return detail;
   }
 
   private openSummary(id: string): void {

@@ -1,6 +1,6 @@
 import type { ParsedNew, SetupField, TokenKind } from '../../core/new-command.ts';
 import type { Suggestion } from '../../core/new-suggestions.ts';
-import { displayUrl, isUrlWord, type SessionSetup } from '../../core/setup.ts';
+import { defaultSessionName, displayUrl, isUrlWord, type SessionSetup } from '../../core/setup.ts';
 import { blank, type Line, line } from '../layout.ts';
 import { type NewOverlay, newFields, RECORD_KEYS, type TuiState } from '../state.ts';
 import type { Tone } from '../theme.ts';
@@ -81,7 +81,11 @@ export function assistLines(view: View, assist: Assist): Line[] {
         setup.url === '' ? p('empty tab', 'fg3') : p(displayUrl(setup.url), 'accent'),
         'url',
       ),
-      row('Name', name === '' ? p('untitled', 'fg3') : p(name, 'fg1'), 'name'),
+      row(
+        'Name',
+        name === '' ? p(defaultSessionName(setup, new Date(state.now)), 'fg3') : p(name, 'fg1'),
+        'name',
+      ),
       row(
         'Profile',
         `${p(profileLabel(state, setup.profile), 'fg1')}  ${p(profileDetail(state, setup.profile), 'fg2')}`,
@@ -96,7 +100,13 @@ export function assistLines(view: View, assist: Assist): Line[] {
       ),
     );
   } else {
-    out.push(row('Name', name === '' ? p('untitled', 'fg3') : p(name, 'fg1'), 'name'));
+    out.push(
+      row(
+        'Name',
+        name === '' ? p(defaultSessionName(setup, new Date(state.now)), 'fg3') : p(name, 'fg1'),
+        'name',
+      ),
+    );
   }
   out.push(
     row(
@@ -210,7 +220,7 @@ export function confirmLines(view: View, overlay: NewOverlay): Line[] {
       value = on
         ? inputText(theme, state.input, room)
         : overlay.name === ''
-          ? p('untitled', 'fg3')
+          ? p(defaultSessionName(overlay.setup, new Date(state.now)), 'fg3')
           : p(overlay.name, 'fg1');
       aside = p('optional', 'fg3');
     }

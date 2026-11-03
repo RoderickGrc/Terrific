@@ -4,6 +4,7 @@ import type { EndpointOption } from './setup.ts';
 import {
   assignProfileSlugs,
   defaultEndpoint,
+  defaultSessionName,
   displayUrl,
   isEndpointName,
   isUrlAttempt,
@@ -122,4 +123,26 @@ test('isUrlWord and isUrlAttempt cover the grammar table hosts', () => {
   equal(isUrlAttempt('http:'), true);
   equal(isUrlAttempt('www.'), true);
   equal(isUrlAttempt('pooling'), false);
+});
+
+test('defaultSessionName is the local start time and the page, or what replaces it', () => {
+  const at = new Date(2026, 10, 3, 8, 5);
+  const browser = {
+    target: 'browser' as const,
+    url: 'https://Haiku.ac/',
+    profile: 'clean',
+    record: { actions: true, network: true, console: true },
+    endpoint: null,
+  };
+  equal(defaultSessionName(browser, at), '2026-11-03 08:05 haiku.ac');
+  equal(
+    defaultSessionName({ ...browser, url: 'http://localhost:5173/cart/?step=2#top' }, at),
+    '2026-11-03 08:05 localhost:5173/cart',
+  );
+  equal(defaultSessionName({ ...browser, url: '' }, at), '2026-11-03 08:05 empty tab');
+  equal(
+    defaultSessionName({ ...browser, target: 'none', endpoint: 'app' }, at),
+    '2026-11-03 08:05 #app',
+  );
+  equal(defaultSessionName({ ...browser, target: 'none' }, at), '2026-11-03 08:05 no browser');
 });

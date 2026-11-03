@@ -37,9 +37,19 @@ function emptyCounts(): Record<EventKind, number> {
   };
 }
 
+// The browser reports `https://site.test/` for a start URL typed as `site.test`, so compare parsed URLs.
+function pageKey(url: string): string {
+  try {
+    return new URL(url).href;
+  } catch {
+    return url;
+  }
+}
+
 function addPage(pages: string[], seen: Set<string>, url: string): void {
-  if (seen.has(url)) return;
-  seen.add(url);
+  const key = pageKey(url);
+  if (seen.has(key)) return;
+  seen.add(key);
   pages.push(url);
 }
 

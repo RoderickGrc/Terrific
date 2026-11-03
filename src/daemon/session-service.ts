@@ -8,7 +8,7 @@ import type {
 import { isTerrificError, TerrificError } from '../core/errors.ts';
 import type { IngestEvent } from '../core/events.ts';
 import type { RandomSource } from '../core/ids.ts';
-import { isEndpointName } from '../core/setup.ts';
+import { defaultSessionName, isEndpointName } from '../core/setup.ts';
 import { isString } from '../core/validate.ts';
 import type { LaunchOptions } from '../recorder/launch.ts';
 import { profileAutomationFailed } from '../recorder/profiles.ts';
@@ -154,7 +154,7 @@ export function createSessionService(options: {
     }
     const launch = setup.target === 'browser' ? options.resolveBrowser(setup.profile) : undefined;
     const created = await store.create({
-      name: request.name,
+      name: request.name ?? defaultSessionName(setup, options.now()),
       setup,
       endpoint: endpointRef,
       projectId,

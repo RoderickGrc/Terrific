@@ -129,6 +129,24 @@ export function displayUrl(url: string): string {
   return url.replace(/^https?:\/\//i, '');
 }
 
+/** The name a session gets when the tester gives none: the local start time, then the page or endpoint. */
+export function defaultSessionName(setup: SessionSetup, at: Date): string {
+  const pad = (n: number): string => String(n).padStart(2, '0');
+  const day = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
+  return `${day} ${pad(at.getHours())}:${pad(at.getMinutes())} ${sessionPlace(setup)}`;
+}
+
+function sessionPlace(setup: SessionSetup): string {
+  if (setup.target === 'none') return setup.endpoint === null ? 'no browser' : `#${setup.endpoint}`;
+  if (setup.url === '') return 'empty tab';
+  try {
+    const url = new URL(setup.url);
+    return `${url.host}${url.pathname.replace(/\/+$/, '')}`;
+  } catch {
+    return displayUrl(setup.url);
+  }
+}
+
 export function copyRecord(record: RecordOptions): RecordOptions {
   return { actions: record.actions, network: record.network, console: record.console };
 }

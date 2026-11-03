@@ -48,6 +48,14 @@ function calls(h: Harness, method: string): unknown[][] {
   return h.fake.calls.filter((call) => call.method === method).map((call) => call.args);
 }
 
+/** Waits until the screen shows `pattern`, for steps that take a few daemon round trips. */
+async function screenWith(h: Harness, pattern: RegExp): Promise<string> {
+  const deadline = Date.now() + 2000;
+  let text = await h.term.text();
+  while (!pattern.test(text) && Date.now() < deadline) text = await h.term.text();
+  return text;
+}
+
 async function startSession(h: Harness, line: string): Promise<string> {
   h.type(line);
   h.term.send(ENTER);
@@ -220,12 +228,13 @@ describe('tui', () => {
     h.term.send(ENTER);
     h.type('coupon bug');
     h.term.send(ENTER);
-    text = await h.term.text();
+    text = await screenWith(h, /STOPPED/);
     deepEqual(calls(h, 'stopSession'), [[id, { name: 'coupon bug' }]]);
     match(text, /Session coupon bug .*STOPPED/);
+    match(text, /Context +4.0 KB/);
     match(text, /● 1 bug to review {2}· {2}no errors/);
     match(text, /To review {2}00:04\.0 {2}bug {3}Total ignores the coupon/);
-    match(text, /Same setup: \/new localhost:5173 "coupon bug" @clean #app/);
+    match(text, /Same setup: \/new localhost:5173 @clean #app/);
     h.term.send(ESC);
     text = await h.term.text();
     match(text, /Recent sessions/);
@@ -236,8 +245,9 @@ describe('tui', () => {
     const h = await open();
     const id = await startSession(h, '/new localhost:5173');
     await h.fake.client.stopSession(id, {});
-    const text = await h.term.text();
+    const text = await screenWith(h, /STOPPED/);
     match(text, /STOPPED/);
+    match(text, /Context +4.0 KB/);
     match(text, /The session stopped/);
     await quit(h);
   });

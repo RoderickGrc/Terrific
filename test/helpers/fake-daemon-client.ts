@@ -108,6 +108,7 @@ export function createFakeDaemon(): FakeDaemon {
   let endpoints = [endpoint('app', 'open', 3), endpoint('worker', 'closed', 0)];
   let sessions = [listItem('s-checkout', 'checkout flow', 1, 2), listItem('s-login', null, 3, 0)];
   const views = new Map<string, SessionView>();
+  const contexts = new Set<string>();
   const events = new Map<string, TerrificEvent[]>();
   const streams = new Map<string, Stream[]>();
   let seq = 0;
@@ -177,7 +178,12 @@ export function createFakeDaemon(): FakeDaemon {
     const view = views.get(id);
     if (view === undefined) throw new TerrificError('NOT_FOUND', `Session ${id} not found.`);
     const stats = sessionStats(events.get(id) ?? []);
-    return { ...view, stats, verdict: verdictLine(stats), contextBytes: null };
+    return {
+      ...view,
+      stats,
+      verdict: verdictLine(stats),
+      contextBytes: contexts.has(id) ? 4096 : null,
+    };
   }
 
   const client: DaemonClient = {
@@ -247,14 +253,18 @@ export function createFakeDaemon(): FakeDaemon {
       record('stopSession', id, body);
       const view = views.get(id);
       if (view === undefined) throw new TerrificError('NOT_FOUND', 'missing');
+      const named: SessionView = { ...view, name: body?.name ?? view.name };
+      views.set(id, named);
+      // Like the daemon: the stop event streams first, the stopped status and context file come later.
+      emit(id, { kind: 'lifecycle', state: 'stopped' }, 90_000);
+      await new Promise((resolve) => setTimeout(resolve, 150));
       const stopped: SessionView = {
-        ...view,
-        name: body?.name ?? view.name,
+        ...named,
         status: 'stopped',
         stoppedAt: new Date(Date.parse(view.startedAt) + 90_000).toISOString(),
       };
       views.set(id, stopped);
-      emit(id, { kind: 'lifecycle', state: 'stopped' }, 90_000);
+      contexts.add(id);
       sessions = [{ ...listItem(id, stopped.name, 0, 0), status: 'stopped' }, ...sessions];
       return stopped;
     },
