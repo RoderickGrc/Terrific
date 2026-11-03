@@ -11,7 +11,7 @@ terrific-cli is a clean rewrite of Terrific as a separate project. It becomes th
 | Engine | Full rewrite, based on the current behavior, with clean architecture and honest names |
 | Package | Separate project and package, command `terrific-cli` |
 | Background process | One daemon shared by all projects on the machine |
-| Storage | `Documents/.terrific/projects/<project-id>/` |
+| Storage | `<data root>/projects/<project-id>/`. The data root is the one terrific already uses: `Documents/.terrific` on Windows, `~/.terrific` elsewhere, or `TERRIFIC_HOME` when set |
 | Project id | Short 8-character id, the same format terrific already uses for workspaces; the id terrific already gave a directory is reused |
 | Legacy sessions | Read in place, never moved |
 | terrific web | Keeps its current storage for now |
@@ -264,7 +264,7 @@ An ingest endpoint is a URL that instrumented code posts diagnostic events to. I
 ## 5. Storage
 
 ```
-Documents/.terrific/
+<data root>/                   Documents/.terrific on Windows, ~/.terrific elsewhere, TERRIFIC_HOME when set
   daemon.json                  pid, port, startedAt
   daemon.log
   token
