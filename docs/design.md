@@ -368,6 +368,7 @@ The build steps, stack, standards and release process are in `docs/plan.md`.
 - `filters.yaml` with a real YAML parser and the options the current file declares but nobody reads.
 - `--all-projects` views and a status line showing the daemon from any directory.
 - A configurable idle time per endpoint instead of the fixed 24 h.
+- Snapshot deltas in the context export: later snapshots as a diff against the previous one, as terrific does today. Until then a repeated snapshot is marked unchanged and a changed one is exported in full.
 
 **Deferred**
 

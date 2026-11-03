@@ -30,7 +30,7 @@ Versions are the latest on npm on 2026-11-02 and are pinned through `package-loc
 | Browser | `playwright-core` | Drives the browsers already on the machine (Comet, Chrome, Edge) without downloading Playwright's own browsers on install. `playwright-core install chromium` stays available for machines with no browser |
 | HTTP and live stream | `node:http` + Server-Sent Events, `fetch` in the client | Ten routes and one stream do not need a framework |
 | Validation | Hand-written guards in `core/validate.ts` | The only untrusted input is the ingest payload and the API bodies. Revisit with a schema library if the guards pass ten payload shapes |
-| Context export | `@toon-format/toon` | The agent context keeps today's TOON event log. Version 4 is current, while terrific uses 2; step 2 checks the output against legacy `context.txt` files and pins the version that matches |
+| Context export | `@toon-format/toon` | The agent context keeps today's shape (header, TOON event log, footer) and field names. It is rebuilt on the typed event model instead of ported: the legacy renderer depends on workarounds (a dummy field to force a layout, unescaping newlines after encoding) that the typed model makes unnecessary. Byte-identical output is not a goal |
 | Snapshot to Markdown | `turndown` | Same conversion terrific uses today, so snapshots read the same |
 
 Runtime dependencies end at five: `@earendil-works/pi-tui`, `playwright-core`, `commander`, `@toon-format/toon`, `turndown`. Dev dependencies: `typescript`, `@types/node`, `@types/turndown`, `@biomejs/biome`, `tsdown`, `publint`, and `@xterm/headless` once the TUI tests need a virtual terminal.
@@ -164,7 +164,7 @@ Each step is one or more pull requests, ends with its check passing in CI, and u
 |---|---|---|---|
 | 0 | Repository | `git init`, the files in section 3 with empty `src/bin.ts` printing the version, Biome, tsconfig, tsdown, CI, the privacy scrub of section 7 | CI green on both OSes; `npm pack --dry-run` lists only the allowed files; `npx terrific-cli@file:. --version` works from the tarball |
 | 1 | TUI spike, one day | A throwaway branch with pi-tui `TuiAltScreen`: header, scrolling log at 10 events per second, input with autocomplete, an overlay, and a key probe that prints what each key sends | Run by hand in Windows Terminal: no flicker, resize works, and a written answer for Ctrl+Enter, Ctrl+Shift+Enter (risk R1), F5, F6 and clipboard. Result in `docs/decisions/tui-library.md`; the branch is deleted |
-| 2 | `core` | Event model, `/new` parser with its messages and suggestions, target and endpoint defaults, stats, network folding, context render, agent prompts, ids, validation | Every example in design.md section 2 is a test; context render matches legacy `context.txt` files; architecture test passes |
+| 2 | `core` | Event model, `/new` parser with its messages and suggestions, target and endpoint defaults, stats, network folding, context render, agent prompts, ids, validation | Every example in design.md section 2 is a test; context render matches golden files built from synthetic sessions, with the legacy sections and field names; architecture test passes |
 | 3 | `store` | Data root (`TERRIFIC_HOME` overrides `Documents/.terrific`), projects with id reuse, sessions, endpoints, settings, legacy reader | `npm run check:legacy` reads every legacy session with today's counts |
 | 4 | `recorder` | Browser launch through a profile, instrumentation, folding, snapshot, screenshot | Recorder tests pass headless in CI; a manual session against a local app gives a context comparable to the old backend's |
 | 5 | `daemon` + ingest | HTTP API, SSE, registry, endpoints with idle close, restart behavior, `daemon run` | Daemon tests pass; `curl` against open, closed, reopened and deleted endpoints, with and without a session |
@@ -183,6 +183,5 @@ Each step is one or more pull requests, ends with its check passing in CI, and u
 ## 10. Open points, decided inside their step
 
 - **Step 1:** pi-tui or raw ANSI; how the clipboard works on each OS (pi-tui ships native clipboard prebuilds and uses OSC 52, to be tested); the second flag binding if Ctrl+Shift+Enter fails.
-- **Step 2:** the `@toon-format/toon` version whose output matches today's context files.
 - **Step 4:** whether "clean browser" uses an installed Chrome or Edge with a fresh temporary profile, or Playwright's Chromium after `playwright-core install chromium`. A fresh profile directory is outside Chrome 136's block on the default user data dir (risk R2), so the installed browser is the first choice.
 - **Step 9:** the GitHub repository name and whether it lives under a personal account or an organization. The plan assumes `RoderickGrc/terrific-cli`.
