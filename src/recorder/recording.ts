@@ -7,7 +7,7 @@ import { randomId } from '../core/ids.ts';
 import type { RecordOptions } from '../core/setup.ts';
 import { parseActionPayload } from './action-payload.ts';
 import { htmlToMarkdown } from './html-markdown.ts';
-import { type LaunchOptions, launchBrowser } from './launch.ts';
+import { type LaunchedBrowser, type LaunchOptions, launchBrowser } from './launch.ts';
 import { attachNetwork } from './network.ts';
 import { BINDING_NAME, pageScriptSource } from './page-script.ts';
 
@@ -43,6 +43,19 @@ function isOpen(page: Page): boolean {
 
 export async function startRecording(options: RecordingOptions): Promise<Recording> {
   const launched = await launchBrowser(options.browser);
+  try {
+    return await attachRecording(launched, options);
+  } catch (error) {
+    // Without this the browser window would outlive a session that failed to start.
+    await launched.close();
+    throw error;
+  }
+}
+
+async function attachRecording(
+  launched: LaunchedBrowser,
+  options: RecordingOptions,
+): Promise<Recording> {
   const { context } = launched;
   let current = launched.page;
   let outcome: 'stopped' | 'browser-closed' | null = null;
@@ -135,7 +148,12 @@ export async function startRecording(options: RecordingOptions): Promise<Recordi
   });
 
   if (options.url !== '') {
-    await currentPage().goto(options.url, { waitUntil: 'domcontentloaded' });
+    try {
+      await currentPage().goto(options.url, { waitUntil: 'domcontentloaded' });
+    } catch {
+      // An unreachable URL (dev server not up yet, a typo) must not abort the session: the
+      // browser shows its error page, the failed request is recorded, and the tester retries.
+    }
   }
 
   return {

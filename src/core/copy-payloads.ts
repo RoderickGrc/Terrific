@@ -145,10 +145,15 @@ export function agentPrompt(input: CopyInput): string {
     lines.push(`Ingest endpoint "${endpoint.name}": ${endpoint.url} (${state})`);
   }
   lines.push(`${stats.total} events: ${countsText(stats)}. ${verdictLine(stats)}`);
-  if (stats.marks.length > 0) {
-    lines.push('', 'Reported by the tester:');
-    for (const mark of stats.marks) {
-      lines.push(`- ${mark.kind} at ${formatOffset(mark.t)}: ${markText(mark.kind, mark.text)}`);
+  // Marks come from the events because only they say who made each one: the tester or an agent.
+  const marks = events.filter((event) => event.kind === 'bug' || event.kind === 'flag');
+  if (marks.length > 0) {
+    lines.push('', 'Bugs and flags:');
+    for (const mark of marks) {
+      const by = mark.author === 'agent' ? ' (marked by an agent)' : '';
+      lines.push(
+        `- ${mark.kind} at ${formatOffset(mark.t)}${by}: ${markText(mark.kind, mark.text)}`,
+      );
     }
   }
   if (stats.failedRequests.length > 0) {
@@ -156,6 +161,17 @@ export function agentPrompt(input: CopyInput): string {
     for (const request of stats.failedRequests.slice(0, 8)) {
       const status = request.status === undefined ? '' : ` ${request.status}`;
       lines.push(`- ${request.method} ${redactUrl(request.url)}${status}`);
+    }
+  }
+  // The verdict counts these errors too, so the prompt lists them instead of leaving a bare count.
+  const errors = [
+    ...stats.consoleErrors.map((row) => ({ t: row.t, text: `console: ${row.text}` })),
+    ...stats.ingestErrors.map((row) => ({ t: row.t, text: `${row.endpoint}: ${row.message}` })),
+  ].sort((a, b) => a.t - b.t);
+  if (errors.length > 0) {
+    lines.push('', 'Errors:');
+    for (const row of errors.slice(0, 8)) {
+      lines.push(`- ${formatOffset(row.t)} ${row.text}`);
     }
   }
   lines.push('', 'Files:');

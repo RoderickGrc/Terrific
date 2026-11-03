@@ -249,3 +249,34 @@ test('closing the browser from outside resolves closed with browser-closed', {
   await recording.stop();
   equal(await recording.closed, 'browser-closed');
 });
+
+test('an unreachable start URL still starts the session and records the failure', {
+  timeout: 30_000,
+}, async (t) => {
+  const browser = findInstalledBrowsers({
+    platform: process.platform,
+    env: process.env,
+    exists: existsSync,
+  })[0];
+  if (browser === undefined) {
+    t.skip('no Chromium-based browser installed');
+    return;
+  }
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const events: EventInput[] = [];
+  // Port 9 (discard) is closed on test machines, like a dev server that is not up yet.
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: 'http://127.0.0.1:9/',
+    record: { actions: true, network: true, console: true },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: (event) => events.push(event),
+  });
+  try {
+    ok(events.some((event) => event.kind === 'network' && event.phase === 'failed'));
+  } finally {
+    await recording.stop();
+  }
+});

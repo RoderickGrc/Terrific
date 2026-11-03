@@ -17,3 +17,7 @@ npm run check
 ```
 
 See [docs/design.md](docs/design.md) for intended behavior and [docs/plan.md](docs/plan.md) for how the work is sequenced.
+
+## Automation
+
+Set `TERRIFIC_HOME` to choose the data root, `TERRIFIC_PORT` for the daemon listen port (default 4569), and `TERRIFIC_HEADLESS=1` so `daemon run` launches the browser without a window for agents and CI.

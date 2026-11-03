@@ -1,10 +1,22 @@
 import { Command, CommanderError } from 'commander';
 import pkg from '../../package.json' with { type: 'json' };
 import { isTerrificError } from '../core/errors.ts';
+import { registerBugCommand } from './commands/bug.ts';
 import { registerDaemonCommand } from './commands/daemon.ts';
+import { registerEventsCommand } from './commands/events.ts';
+import { registerFlagCommand } from './commands/flag.ts';
 import { registerIngestCommand } from './commands/ingest.ts';
+import { registerNoteCommand } from './commands/note.ts';
 import { registerProjectsCommand } from './commands/projects.ts';
+import { registerPromptCommand } from './commands/prompt.ts';
+import { registerScreenshotCommand } from './commands/screenshot.ts';
+import { registerContextCommand } from './commands/session-context.ts';
+import { registerSessionsCommand } from './commands/sessions.ts';
+import { registerShowCommand } from './commands/show.ts';
+import { registerSnapshotCommand } from './commands/snapshot.ts';
+import { registerStartCommand } from './commands/start.ts';
 import { registerStatusCommand } from './commands/status.ts';
+import { registerStopCommand } from './commands/stop.ts';
 import type { CliIo } from './io.ts';
 import { addJsonOption, printJson } from './output.ts';
 
@@ -53,7 +65,18 @@ function createProgram(io: CliIo): Command {
   registerProjectsCommand(program, io);
   registerIngestCommand(program, io);
   registerStatusCommand(program, io);
-  // Keep command wiring here so a session command is one new file plus one line.
+  registerStartCommand(program, io);
+  registerStopCommand(program, io);
+  registerSessionsCommand(program, io);
+  registerShowCommand(program, io);
+  registerNoteCommand(program, io);
+  registerBugCommand(program, io);
+  registerFlagCommand(program, io);
+  registerScreenshotCommand(program, io);
+  registerSnapshotCommand(program, io);
+  registerEventsCommand(program, io);
+  registerContextCommand(program, io);
+  registerPromptCommand(program, io);
   return program;
 }
 

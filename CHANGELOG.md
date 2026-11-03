@@ -9,3 +9,5 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 ### Added
 
 - Repository scaffolding
+- Session CLI: `start`, `stop`, `sessions`, `show`, marks, captures, `events`, `context`, `prompt`
+- `TERRIFIC_HEADLESS=1` for `daemon run`

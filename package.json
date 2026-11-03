@@ -40,7 +40,7 @@
     "format": "biome check --write .",
     "test": "node --test \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
     "check:legacy": "node scripts/check-legacy.ts",
-    "check": "npm run lint && npm run typecheck && npm test && npm run build && publint && node scripts/check-pack.ts",
+    "check": "npm run lint && npm run typecheck && npm test && npm run build && node scripts/smoke-dist.ts && publint && node scripts/check-pack.ts",
     "prepack": "npm run build"
   },
   "devDependencies": {
