@@ -1,5 +1,5 @@
 import { deepEqual, equal, match, ok } from 'node:assert/strict';
-import { describe, test } from 'node:test';
+import { afterEach, describe, test } from 'node:test';
 import type { StartSessionRequest } from '../src/core/api.ts';
 import { detachedMessage, loadInitial, type MountedTui, mountTui } from '../src/tui/run.ts';
 import { createFakeDaemon, type FakeDaemon, PROJECT } from './helpers/fake-daemon-client.ts';
@@ -25,6 +25,9 @@ type Harness = {
   type(text: string): void;
 };
 
+// The open TUI, quit after each test so a failed assertion does not leave it running.
+let current: Harness | undefined;
+
 async function open(columns = 110, rows = 34): Promise<Harness> {
   const fake = createFakeDaemon();
   const term = new VirtualTerminal(columns, rows);
@@ -33,7 +36,8 @@ async function open(columns = 110, rows = 34): Promise<Harness> {
   const type = (text: string): void => {
     for (const ch of text) term.send(ch);
   };
-  return { term, fake, tui, type };
+  current = { term, fake, tui, type };
+  return current;
 }
 
 // The first Ctrl+C closes an open panel, if any; two more quit.
@@ -68,6 +72,11 @@ async function startSession(h: Harness, line: string): Promise<string> {
 }
 
 describe('tui', () => {
+  afterEach(async () => {
+    if (current !== undefined) await quit(current);
+    current = undefined;
+  });
+
   for (const { columns, rows } of SIZES) {
     test(`home shows the project, its endpoints and recent sessions at ${columns}x${rows}`, async () => {
       const h = await open(columns, rows);
@@ -80,7 +89,7 @@ describe('tui', () => {
       match(text, /checkout flow {2}s-checkout/);
       match(text, /2 bugs/);
       match(text, /Type a command\. \/new starts a session/);
-      match(lines[rows - 2] ?? '', /\/new start {2}\/sessions open one/);
+      match(lines[rows - 2] ?? '', /^ *\/ commands {2}Ctrl\+C quit *$/);
       await quit(h);
     });
 
@@ -331,7 +340,7 @@ describe('tui', () => {
     h.term.resize(80, 24);
     const lines = await h.term.lines();
     match(lines[0] ?? '', /^ Terrific {2}acme-shop .*no session $/);
-    match(lines[22] ?? '', /\/new start/);
+    match(lines[22] ?? '', /\/ commands {2}Ctrl\+C quit/);
     await quit(h);
   });
 });

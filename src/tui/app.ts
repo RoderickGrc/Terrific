@@ -436,11 +436,9 @@ export class TuiApp implements Component, Focusable {
         ['Ctrl+C', 'quit'],
       ]);
     }
+    // Home already shows /new beside the input and /sessions above the list.
     return hints(theme, [
-      ['/new', 'start'],
-      ['/sessions', 'open one'],
-      ['/ingest', 'endpoints'],
-      ['/', 'all commands'],
+      ['/', 'commands'],
       ['Ctrl+C', 'quit'],
     ]);
   }
