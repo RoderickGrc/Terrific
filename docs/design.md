@@ -262,7 +262,7 @@ The app being tested keeps the endpoint URL in its own config (for example `.env
 
 An ingest endpoint is a URL that instrumented code posts diagnostic events to. It replaces the current "attachment" concept and, with sessions without a browser, the `debug_gateway` session type.
 
-- **Named and project-scoped.** Each endpoint has a short name (`app`, `worker`), unique in the project. The name is the handle for commands and `#name` tokens.
+- **Named and project-scoped.** Each endpoint has a short name, unique in the project, usually the stage being built or validated, such as a ticket or feature (`checkout-v2`, `tck-142`). The name is the handle for commands and `#name` tokens.
 - **Reserved URL.** `POST http://127.0.0.1:<port>/ingest/ing_<token>`, with a random token created once. The URL survives close, reopen, rename and daemon restarts, and only stops working when the endpoint is deleted. The token is kept because the ingest route has no auth token: a guessable URL would let any page open in the browser post fake events to localhost (inference, not tested).
 - **Independent of sessions.** An open endpoint receives whether or not a session is running. Every event goes to the endpoint's own log.
 - **One endpoint per session.** A session links to at most one endpoint, chosen in `/new` (by default the last one used if still open, otherwise the most recently active open one). While the session records, that endpoint's events are also copied into the session's `events.jsonl`, so the session folder is complete for an agent. Stopping the session does not touch the endpoint. Several sessions may link to the same endpoint over time, and one endpoint keeps receiving between them.

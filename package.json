@@ -19,7 +19,7 @@
   },
   "files": [
     "dist",
-    "skills",
+    ".agents/skills",
     "CHANGELOG.md"
   ],
   "engines": {

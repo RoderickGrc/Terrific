@@ -21,7 +21,7 @@ Times are offsets from the session start, written `mm:ss` (the output shows `mm:
 - `console` errors;
 - `ingest` events with level `error`.
 
-`terrific context <id> --only bug,flag,note,errors` writes a filtered `context.txt`.
+`terrific context <id> --only bug,flag,note,errors` rewrites `context.txt` filtered; without `--only` it writes the full one again.
 
 ## Kinds
 
@@ -45,5 +45,5 @@ The session folder, printed by `start` and `prompt`, contains:
 
 - `session.json`;
 - `events.jsonl`, the lossless source of truth, so grep it directly when filters fall short;
-- `context.txt`, after running `terrific context`;
+- `context.txt`, written when the session stops;
 - `screenshots/`.

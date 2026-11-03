@@ -24,7 +24,10 @@ const packed = report as {
 const allowed = new Set(['package.json', 'README.md', 'LICENSE', 'CHANGELOG.md']);
 const extra = packed.files
   .map((file) => file.path.replaceAll('\\', '/').replace(/^package\//, ''))
-  .filter((path) => !path.startsWith('dist/') && !path.startsWith('skills/') && !allowed.has(path));
+  .filter(
+    (path) =>
+      !path.startsWith('dist/') && !path.startsWith('.agents/skills/') && !allowed.has(path),
+  );
 
 if (extra.length > 0) {
   console.error(`packed files outside the allow list:\n${extra.join('\n')}`);

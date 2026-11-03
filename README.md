@@ -24,4 +24,4 @@ Set `TERRIFIC_HOME` to choose the data root, `TERRIFIC_PORT` for the daemon list
 
 ## Agent skill
 
-`skills/terrific` teaches coding agents to debug with terrific: open an ingest endpoint, instrument, record a session, and read the evidence. Copy the folder into your agent's skills directory, for example `~/.claude/skills/terrific` for Claude Code.
+`.agents/skills/terrific` teaches coding agents to debug with terrific: open an ingest endpoint, instrument, record a session, and read the evidence. Copy the folder into your agent's skills directory, for example `~/.claude/skills/terrific` for Claude Code.

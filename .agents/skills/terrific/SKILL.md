@@ -21,9 +21,11 @@ Debug with that evidence. Do not claim a root cause without it.
 
 1. Understand the symptom: expected behavior, actual behavior, and how to reproduce it. Read the relevant code before editing.
 2. Write 3-5 diagnostics. Give each a stable slug (`stale-client-state`, `request-url-mismatch`) and say what runtime evidence would confirm or reject it.
-3. Open an endpoint with `terrific ingest up app`, which prints the URL.
-   - The same name keeps the same URL, even after a close or a daemon restart, so the URL can live in the app's `.env`.
-   - Use one name per process (`app`, `api`, `worker`).
+3. Open an endpoint with `terrific ingest up checkout-v2`, which prints the URL.
+   - Name it after the stage being built or validated, such as a ticket or feature (`checkout-v2`, `tck-142`). It is not named after a process.
+   - Names use lowercase letters, digits and dashes, up to 32 characters.
+   - Run `terrific ingest list` first, and reuse the endpoint of the current stage if there is one.
+   - The same name keeps the same URL, even after a close or a daemon restart, so the URL can stay in the app's config for the whole stage.
    - Only post to URLs this command printed for this project.
 4. Instrument 2-6 points with fire-and-forget POSTs to that URL. Go beyond 10 only with the user's approval.
    - Each event carries `message`, `source` (`file:line`) and `diagnosticSlug`.
@@ -31,8 +33,8 @@ Debug with that evidence. Do not claim a root cause without it.
    - Reuse an existing logger or helper if it can post asynchronously.
    - Payload, snippets and safety rules: [references/telemetry.md](references/telemetry.md).
 5. Start a session linked to the endpoint. Always state the target, because a bare `terrific start` repeats the last setup.
-   - **Browser**, when UI, navigation, network or console matters: `terrific start localhost:5173 "checkout total" #app`. A person drives the window. Add `@profile` to start logged in ([references/profiles.md](references/profiles.md)).
-   - **No browser**, for server, script, test, worker or CLI flows: `terrific start "import retry" #app --no-browser`.
+   - **Browser**, when UI, navigation, network or console matters: `terrific start localhost:5173 "checkout total" #checkout-v2`. A person drives the window. Add `@profile` to start logged in ([references/profiles.md](references/profiles.md)).
+   - **No browser**, for server, script, test, worker or CLI flows: `terrific start "payment webhook" #checkout-v2 --no-browser`.
    - If the app is fullstack and the right choice is unclear, ask the user.
    - The command prints `session <id> recording`, the session folder and the endpoint URL.
 6. Reproduce.
@@ -41,14 +43,14 @@ Debug with that evidence. Do not claim a root cause without it.
    - While the session runs, mark moments yourself with `terrific note|bug|flag <id> [text]`.
    - In a browser session, `terrific screenshot <id>` captures the page and `terrific snapshot <id>` saves it as markdown.
    - To watch live, run `terrific events <id> --follow` in the background. It ends when the session stops.
-7. Stop with `terrific stop <id>`, which prints the summary. Omit the id when only one session is recording.
+7. Stop with `terrific stop <id>`, which prints the summary and writes `context.txt` in the session folder. Omit the id when only one session is recording.
    - "Session is not recording" means the user already stopped it, so go straight to the evidence.
    - Stopping leaves the endpoint open.
 8. Read the evidence, cheapest first:
    - `terrific prompt <id>`: summary, bugs and flags with times, file paths, and ready-made targeted reads.
    - `terrific events <id> --type errors`, `--type ingest`, `--around 01:20 --window 10s`, `--at 01:20`. Details: [references/events.md](references/events.md).
-   - `terrific context <id>` writes `context.txt` in the session folder and prints its path and token estimate. Read it when you need the whole timeline.
-   - If nothing relevant was captured, do not guess. Either the code path was not reached or the events went elsewhere. Check `terrific ingest tail app`, refine the instrumentation, and reproduce again.
+   - `context.txt`, at the path `prompt` prints, when you need the whole timeline. `terrific context <id> --only bug,flag,note,errors` rewrites it filtered.
+   - If nothing relevant was captured, do not guess. Either the code path was not reached or the events went elsewhere. Check `terrific ingest tail checkout-v2`, refine the instrumentation, and reproduce again.
 9. Rate each diagnostic CONFIRMED, REJECTED or INCONCLUSIVE.
    - Cite events: message, source, status, time.
    - Fix only what the evidence supports, and undo changes made for rejected diagnostics.
@@ -61,9 +63,9 @@ Debug with that evidence. Do not claim a root cause without it.
 
 Not every check needs a session. An open endpoint stores events with no session running.
 
-1. `terrific ingest up app`
+1. `terrific ingest up checkout-v2`
 2. Run the instrumented code.
-3. `terrific ingest tail app` (`--follow` streams).
+3. `terrific ingest tail checkout-v2` (`--follow` streams).
 
 Use a session when the evidence has to be saved with marks or a browser timeline, or compared before and after a fix.
 
