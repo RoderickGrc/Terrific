@@ -122,7 +122,7 @@ For backend work, scripts, or anything that is not a web page. The session recor
 | `/sessions [search]` | home, summary | Session picker. Alias `/resume` |
 | `/ingest` | all | Ingest endpoints of the project (see below) |
 | `/attach` | home, summary | Return to the session recording in the background |
-| `/profiles` (`/profile`), `/record` | home, summary | Manage browser profiles and pick the one `/new` starts from; choose what `/new` records |
+| `/profiles` (`/profile`, `/model`), `/record` | home, summary | Manage browser profiles and pick the one `/new` starts from; choose what `/new` records |
 | `/note <text>` | live | Same as typing plain text |
 | `/bug [text]` | live | Same as Ctrl+Enter |
 | `/flag [text]` | live | Same as Ctrl+Shift+Enter |
@@ -151,7 +151,7 @@ Keys: Enter opens the summary, Ctrl+F pins, Ctrl+R renames in place, Ctrl+D dele
 
 ### Profiles panel
 
-`/profiles` lists `@clean` and the profiles terrific keeps: name, mode, browser and what it keeps or when it was saved, with `default` on the one `/new` starts from and `● open` on one open for setup. Keys: Enter makes it the default, Space opens its browser to log in and, pressed again, closes it (a snapshot profile saves then), Ctrl+N opens a form below the list (Name, Mode, Browser, URL; ↑↓ moves, ←→ changes), Ctrl+R renames in place, Ctrl+D deletes after a second Ctrl+D, Esc closes. Clean cannot be opened, renamed or deleted. A default profile that no longer exists falls back to `@clean` with a notice.
+`/profiles` (also `/profile` and `/model`, for people used to chat commands) lists `@clean` and the profiles terrific keeps: name, mode, browser and what it keeps or when it was saved, with `default` on the one `/new` starts from and `● open` on one open for setup. Keys: Enter makes it the default, Space opens its browser to log in and, pressed again, closes it (a snapshot profile saves then), Ctrl+N opens a form below the list (Name, Mode, Browser, URL; ↑↓ moves, ←→ changes), Ctrl+R renames in place, Ctrl+D deletes after a second Ctrl+D, Esc closes. Clean cannot be opened, renamed or deleted. A default profile that no longer exists falls back to `@clean` with a notice.
 
 ### Ingest view
 

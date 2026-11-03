@@ -57,7 +57,7 @@ export const COMMANDS: CommandSpec[] = [
   },
   {
     name: 'profiles',
-    aliases: ['profile'],
+    aliases: ['profile', 'model'],
     description: 'Browser profiles: the default, new ones, logins',
     screens: IDLE,
   },

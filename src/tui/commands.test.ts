@@ -21,3 +21,10 @@ test('the palette matches names and aliases until arguments start', () => {
   equal(findCommand('RESUME', list)?.name, 'sessions');
   deepEqual(splitCommand('/name  checkout v2 '), { word: 'name', args: 'checkout v2' });
 });
+
+test('/model and /profile open the profiles panel, for people used to chat commands', () => {
+  const list = availableCommands({ screen: 'home', browser: false, background: false });
+  equal(findCommand('model', list)?.name, 'profiles');
+  equal(findCommand('profile', list)?.name, 'profiles');
+  deepEqual(names(paletteMatches('/mod', list)), ['profiles']);
+});
