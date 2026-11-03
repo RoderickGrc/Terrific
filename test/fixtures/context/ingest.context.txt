@@ -1,0 +1,50 @@
+=== CONTEXT ===
+ID: xy98uv76ts
+Name: worker logs
+Status: stopped
+Date: 2026-03-01T11:00:00.000Z
+Initial URL: No browser
+Recorded: no browser, ingest worker
+Export filters: All events
+Events exported: 4 of 6
+
+=== EVENT LOG ===
+events[4]:
+  - t: "00:00.1"
+    type: SVR
+    msg: worker booted
+    endpoint: worker
+    level: debug
+    source: "worker.ts:4"
+    diagnosticSlug: boot
+    data:
+      pid: 4412
+      tags: "items[4]: [\"a\",\"b\"...]"
+  - t: "00:00.2"
+    type: SVR
+    msg: job accepted
+    endpoint: worker
+    level: info
+    source: "worker.ts:18"
+    data:
+      note: "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx[...]xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+  - t: "00:00.3"
+    type: SVR
+    msg: retry scheduled
+    endpoint: worker
+    level: warn
+    source: "worker.ts:40"
+    data:
+      attempt: 2
+  - t: "00:00.4"
+    type: SVR
+    msg: queue unavailable
+    endpoint: worker
+    level: error
+    source: "worker.ts:88"
+    diagnosticSlug: queue-down
+    data:
+      token: <REDACTED>
+      ok: false
+
+=== END OF EXPORT ===

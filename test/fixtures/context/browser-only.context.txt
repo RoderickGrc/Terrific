@@ -1,0 +1,34 @@
+=== CONTEXT ===
+ID: ab12cd34ef
+Name: login check
+Status: stopped
+Date: 2026-03-01T10:00:00.000Z
+Initial URL: http://app.test/login
+Recorded: actions on, network on, console on, ingest api
+Export filters: Only: bug, flag, errors
+Events exported: 5 of 29
+
+=== EVENT LOG ===
+events[5]:
+  - t: "00:01.2"
+    type: NET
+    msg: "GET http://app.test/api/missing"
+    status: 404
+    ms: 30
+    response: "{error:string}"
+  - t: "00:01.4"
+    type: NET
+    msg: "GET http://app.test/api/crash"
+    error: "net::ERR_CONNECTION_REFUSED"
+  - t: "00:01.7"
+    type: CON
+    msg: "Uncaught TypeError: cannot read token"
+    level: error
+  - t: "00:02.2"
+    type: BUG
+    msg: Bug reported
+  - t: "00:02.3"
+    type: FLAG
+    msg: Check the 404
+
+=== END OF EXPORT ===

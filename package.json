@@ -36,7 +36,7 @@
     "dev": "node src/bin.ts",
     "build": "tsdown",
     "typecheck": "tsc --noEmit",
-    "lint": "biome check .",
+    "lint": "biome check --error-on-warnings .",
     "format": "biome check --write .",
     "test": "node --test \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
     "check": "npm run lint && npm run typecheck && npm test && npm run build && publint && node scripts/check-pack.ts",
@@ -48,5 +48,8 @@
     "publint": "0.3.25",
     "tsdown": "0.22.14",
     "typescript": "7.0.2"
+  },
+  "dependencies": {
+    "@toon-format/toon": "4.4.0"
   }
 }

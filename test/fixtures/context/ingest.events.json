@@ -1,0 +1,70 @@
+[
+  {
+    "id": "ev_100000000001",
+    "seq": 1,
+    "at": "2026-03-01T11:00:00.000Z",
+    "t": 0,
+    "kind": "lifecycle",
+    "state": "started"
+  },
+  {
+    "id": "ev_100000000002",
+    "seq": 2,
+    "at": "2026-03-01T11:00:00.100Z",
+    "t": 100,
+    "kind": "ingest",
+    "endpoint": "worker",
+    "message": "worker booted",
+    "source": "worker.ts:4",
+    "diagnosticSlug": "boot",
+    "level": "debug",
+    "data": { "pid": 4412, "tags": ["a", "b", "c", "d"] }
+  },
+  {
+    "id": "ev_100000000003",
+    "seq": 3,
+    "at": "2026-03-01T11:00:00.200Z",
+    "t": 200,
+    "kind": "ingest",
+    "endpoint": "worker",
+    "message": "job accepted",
+    "source": "worker.ts:18",
+    "level": "info",
+    "data": {
+      "note": "xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+    }
+  },
+  {
+    "id": "ev_100000000004",
+    "seq": 4,
+    "at": "2026-03-01T11:00:00.300Z",
+    "t": 300,
+    "kind": "ingest",
+    "endpoint": "worker",
+    "message": "retry scheduled",
+    "source": "worker.ts:40",
+    "level": "warn",
+    "data": { "attempt": 2 }
+  },
+  {
+    "id": "ev_100000000005",
+    "seq": 5,
+    "at": "2026-03-01T11:00:00.400Z",
+    "t": 400,
+    "kind": "ingest",
+    "endpoint": "worker",
+    "message": "queue unavailable",
+    "source": "worker.ts:88",
+    "diagnosticSlug": "queue-down",
+    "level": "error",
+    "data": { "token": "should-hide", "ok": false }
+  },
+  {
+    "id": "ev_100000000006",
+    "seq": 6,
+    "at": "2026-03-01T11:00:00.500Z",
+    "t": 500,
+    "kind": "lifecycle",
+    "state": "stopped"
+  }
+]

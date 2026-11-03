@@ -1,0 +1,97 @@
+=== CONTEXT ===
+ID: ab12cd34ef
+Name: login check
+Status: stopped
+Date: 2026-03-01T10:00:00.000Z
+Initial URL: http://app.test/login
+Recorded: actions on, network on, console on, ingest api
+Export filters: All events
+Events exported: 16 of 29
+
+=== EVENT LOG ===
+events[16]:
+  - t: "00:00.1"
+    type: RELOAD
+    msg: "http://app.test/login"
+    title: Login
+  - t: "00:00.2"
+    type: ACT
+    msg: "click \"Email\""
+    target:
+      label: Email
+      selector: "#email"
+  - t: "00:00.4"
+    type: ACT
+    msg: "input \"Email\""
+    val: user@example.test
+    target:
+      label: Email
+      selector: "#email"
+  - t: "00:00.6"
+    type: ACT
+    msg: "input \"Password\""
+    val: <8 chars hidden>
+    target:
+      label: Password
+      selector: "#password"
+  - t: "00:00.7"
+    type: ACT
+    msg: "click \"Sign in\""
+    target:
+      label: Sign in
+      selector: button.submit
+  - t: "00:01.0"
+    type: NET
+    msg: "POST http://app.test/api/login"
+    status: 201
+    ms: 45
+    body:
+      email: user@example.test
+      password: <REDACTED>
+      remember: true
+    response: "{id:string, role:string, createdAt:string}"
+  - t: "00:01.2"
+    type: NET
+    msg: "GET http://app.test/api/missing"
+    status: 404
+    ms: 30
+    response: "{error:string}"
+  - t: "00:01.4"
+    type: NET
+    msg: "GET http://app.test/api/crash"
+    error: "net::ERR_CONNECTION_REFUSED"
+  - t: "00:01.6"
+    type: CON
+    msg: Retrying session cookie
+    level: warn
+  - t: "00:01.7"
+    type: CON
+    msg: "Uncaught TypeError: cannot read token"
+    level: error
+  - t: "00:01.8"
+    type: SNAP
+    msg: Home
+    url: "http://app.test/home"
+    content: Heading ¶ Welcome
+  - t: "00:01.9"
+    type: SNAP
+    msg: Home
+    url: "http://app.test/home"
+    unchanged: true
+  - t: "00:02.0"
+    type: SNAP
+    msg: Home
+    url: "http://app.test/home"
+    content: Heading ¶ Changed
+  - t: "00:02.1"
+    type: SHOT
+    msg: Screenshot
+    file: screenshots/ss_home.png
+  - t: "00:02.2"
+    type: BUG
+    msg: Bug reported
+  - t: "00:02.3"
+    type: FLAG
+    msg: Check the 404
+
+=== END OF EXPORT ===
