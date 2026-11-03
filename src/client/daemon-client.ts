@@ -16,9 +16,11 @@ import {
   type MarkRequest,
   type MarkResponse,
   type OkResponse,
+  type ProfileView,
   type ProjectSettingsView,
   type ProjectView,
   type PromptResponse,
+  profilesPath,
   projectSettingsPath,
   projectsPath,
   type RenameEndpointRequest,
@@ -67,6 +69,7 @@ export type SessionEventsQuery = {
 
 export type DaemonClient = {
   health(): Promise<HealthView>;
+  listProfiles(): Promise<ProfileView[]>;
   resolveProject(body: ResolveProjectRequest): Promise<ProjectView>;
   listProjects(): Promise<ProjectView[]>;
   listEndpoints(projectId: string): Promise<EndpointView[]>;
@@ -189,6 +192,7 @@ export function createDaemonClient(options: DaemonClientOptions): DaemonClient {
 
   return {
     health: () => request('GET', healthPath()),
+    listProfiles: () => request('GET', profilesPath()),
     resolveProject: (body) => request('POST', resolveProjectPath(), body),
     listProjects: () => request('GET', projectsPath()),
     listEndpoints: (projectId) => request('GET', endpointsPath(projectId)),

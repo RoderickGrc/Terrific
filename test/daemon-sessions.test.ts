@@ -27,7 +27,7 @@ import type { IngestEvent, TerrificEvent } from '../src/core/events.ts';
 import type { RandomSource } from '../src/core/ids.ts';
 import type { SessionSetup } from '../src/core/setup.ts';
 import { type DaemonHandle, startDaemon } from '../src/daemon/daemon.ts';
-import { resolveCleanBrowser } from '../src/daemon/resolve-browser.ts';
+import { resolveBrowserProfile } from '../src/daemon/resolve-browser.ts';
 import { findInstalledBrowsers } from '../src/recorder/browsers.ts';
 
 const SITE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'site');
@@ -64,7 +64,7 @@ async function start(root?: string, now?: () => Date) {
     now: now ?? (() => new Date()),
     random: random(),
     maintenanceIntervalMs: 60_000,
-    resolveBrowser: (profile) => resolveCleanBrowser(profile, true),
+    resolveBrowser: (profile) => resolveBrowserProfile(profile, true),
   });
   handles.push(handle);
   return { handle, dataRoot };
@@ -309,7 +309,7 @@ test('no-browser session: flag, screenshot 400, stop', async () => {
     setup: { ...browserSetup('http://127.0.0.1/', 'main'), profile: 'work' },
   });
   equal(blocked.status, 400);
-  match(errorMessage(blocked.value), /clean/);
+  match(errorMessage(blocked.value), /No browser profile called "work"/);
 
   const stopped = await call(handle, 'POST', sessionStopPath(session.id), {});
   equal(stopped.status, 200);

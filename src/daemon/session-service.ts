@@ -11,6 +11,7 @@ import type { RandomSource } from '../core/ids.ts';
 import { isEndpointName } from '../core/setup.ts';
 import { isString } from '../core/validate.ts';
 import type { LaunchOptions } from '../recorder/launch.ts';
+import { profileAutomationFailed } from '../recorder/profiles.ts';
 import { startRecording } from '../recorder/recording.ts';
 import { createSessionStore } from '../store/sessions.ts';
 import type { IngestService } from './ingest-service.ts';
@@ -189,6 +190,11 @@ export function createSessionService(options: {
       }
     } catch (error) {
       if (lives.has(created.record.id)) await stop(created.record.id);
+      if (launch !== undefined && setup.profile !== 'clean') {
+        const browser = launch.browserName ?? 'The browser';
+        const label = launch.profileLabel ?? setup.profile;
+        throw new TerrificError('INTERNAL', profileAutomationFailed(browser, label));
+      }
       throw error;
     }
     return viewOf(live.store, live.record, live.project);

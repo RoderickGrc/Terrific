@@ -164,6 +164,14 @@ export type ContextRequest = {
   only?: ContextOnly[];
 };
 
+export type ProfileView = {
+  slug: string;
+  label: string;
+  detail: string;
+  browser: string;
+  blockedReason: string | null;
+};
+
 export type ProjectSettingsView = {
   version: 1;
   lastSetup: SessionSetup;
@@ -188,6 +196,10 @@ export function ingestUrl(port: number, token: string): string {
 
 export function healthPath(): string {
   return '/v1/health';
+}
+
+export function profilesPath(): string {
+  return '/v1/profiles';
 }
 
 export function projectsPath(): string {

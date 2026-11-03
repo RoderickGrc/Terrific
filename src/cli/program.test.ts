@@ -1,4 +1,4 @@
-import { match, ok } from 'node:assert/strict';
+import { deepEqual, match, ok } from 'node:assert/strict';
 import { getRandomValues } from 'node:crypto';
 import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
@@ -8,7 +8,7 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 import type { SessionView } from '../core/api.ts';
 import { type DaemonHandle, startDaemon } from '../daemon/daemon.ts';
-import { resolveCleanBrowser } from '../daemon/resolve-browser.ts';
+import { resolveBrowserProfile } from '../daemon/resolve-browser.ts';
 import { findInstalledBrowsers } from '../recorder/browsers.ts';
 import type { CliIo } from './io.ts';
 import { runCli } from './program.ts';
@@ -71,7 +71,7 @@ async function setup() {
     appVersion: '0.0.0-test',
     now: () => new Date(),
     random: (n) => getRandomValues(new Uint8Array(n)),
-    resolveBrowser: (profile) => resolveCleanBrowser(profile, true),
+    resolveBrowser: (profile) => resolveBrowserProfile(profile, true),
   });
   handles.push(handle);
   const env = {
@@ -261,6 +261,42 @@ test('agent flow: no-browser session, marks, ingest, events, stop, show, prompt'
   equalExit(await runCli(argv('context', id, '--only', 'bug'), context), 0);
   match(context.out, /context\.txt/);
   match(context.out, /~/);
+});
+
+test('profiles --json includes clean when a browser is installed', async (t) => {
+  const installed = findInstalledBrowsers({
+    platform: process.platform,
+    env: process.env,
+    exists: existsSync,
+  });
+  if (installed[0] === undefined) {
+    t.skip('no Chromium-based browser installed');
+    return;
+  }
+  const { cwd, env } = await setup();
+  const jsonIo = captureIo(cwd, env);
+  equalExit(await runCli(argv('profiles', '--json'), jsonIo), 0);
+  const listed = JSON.parse(jsonIo.out) as { slug?: string; label?: string }[];
+  ok(Array.isArray(listed) && listed.length > 0);
+  equalText(listed[0]?.slug, 'clean');
+  equalText(listed[0]?.label, 'Clean browser');
+});
+
+test('doctor --json has the check shape and a writable temp data root', async () => {
+  const { cwd, env } = await setup();
+  const jsonIo = captureIo(cwd, env);
+  const code = await runCli(argv('doctor', '--json'), jsonIo);
+  const body = JSON.parse(jsonIo.out) as {
+    checks?: { name?: string; ok?: boolean; detail?: string; fix?: string }[];
+  };
+  ok(Array.isArray(body.checks));
+  const names = (body.checks ?? []).map((item) => item.name);
+  deepEqual(names, ['node', 'browser', 'data-root', 'daemon', 'port', 'legacy', 'profiles']);
+  const dataRoot = (body.checks ?? []).find((item) => item.name === 'data-root');
+  ok(dataRoot?.ok === true);
+  if (code !== 0 && code !== 1) {
+    throw new Error(`expected doctor exit 0 or 1, got ${code}`);
+  }
 });
 
 test('start @nope exits 2 listing the problem and stop with none exits 2', async () => {

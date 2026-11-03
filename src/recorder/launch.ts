@@ -9,6 +9,8 @@ export type LaunchOptions = {
   userDataDir: string | null;
   profileDirectory?: string;
   headless: boolean;
+  browserName?: string;
+  profileLabel?: string;
 };
 
 export type LaunchedBrowser = {

@@ -3,10 +3,12 @@ import pkg from '../../package.json' with { type: 'json' };
 import { isTerrificError } from '../core/errors.ts';
 import { registerBugCommand } from './commands/bug.ts';
 import { registerDaemonCommand } from './commands/daemon.ts';
+import { registerDoctorCommand } from './commands/doctor.ts';
 import { registerEventsCommand } from './commands/events.ts';
 import { registerFlagCommand } from './commands/flag.ts';
 import { registerIngestCommand } from './commands/ingest.ts';
 import { registerNoteCommand } from './commands/note.ts';
+import { registerProfilesCommand } from './commands/profiles.ts';
 import { registerProjectsCommand } from './commands/projects.ts';
 import { registerPromptCommand } from './commands/prompt.ts';
 import { registerScreenshotCommand } from './commands/screenshot.ts';
@@ -17,6 +19,7 @@ import { registerSnapshotCommand } from './commands/snapshot.ts';
 import { registerStartCommand } from './commands/start.ts';
 import { registerStatusCommand } from './commands/status.ts';
 import { registerStopCommand } from './commands/stop.ts';
+import { isCliExit } from './exit.ts';
 import type { CliIo } from './io.ts';
 import { addJsonOption, printJson } from './output.ts';
 
@@ -27,6 +30,7 @@ function argvWantsJson(argv: string[]): boolean {
 }
 
 function handleError(error: unknown, io: CliIo, json: boolean): number {
+  if (isCliExit(error)) return error.exitCode;
   if (error instanceof CommanderError) {
     return error.exitCode === 0 ? 0 : 2;
   }
@@ -63,6 +67,8 @@ function createProgram(io: CliIo): Command {
   addJsonOption(program);
   registerDaemonCommand(program, io);
   registerProjectsCommand(program, io);
+  registerProfilesCommand(program, io);
+  registerDoctorCommand(program, io);
   registerIngestCommand(program, io);
   registerStatusCommand(program, io);
   registerStartCommand(program, io);

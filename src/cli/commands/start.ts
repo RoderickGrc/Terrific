@@ -1,14 +1,20 @@
 import { type Command, CommanderError } from 'commander';
-import type { EndpointView } from '../../core/api.ts';
+import type { EndpointView, ProfileView } from '../../core/api.ts';
 import { parseNewArgv } from '../../core/new-command.ts';
 import type { EndpointOption, ProfileOption } from '../../core/setup.ts';
 import { createCliContext } from '../context.ts';
 import type { CliIo } from '../io.ts';
 import { addJsonOption, printJson, printLine, wantsJson } from '../output.ts';
 
-const CLEAN_PROFILES: ProfileOption[] = [
-  { slug: 'clean', label: 'Clean browser', detail: 'fresh storage, nothing saved' },
-];
+function toProfileOption(profile: ProfileView): ProfileOption {
+  const option: ProfileOption = {
+    slug: profile.slug,
+    label: profile.label,
+    detail: profile.detail,
+  };
+  if (profile.blockedReason !== null) option.blockedReason = profile.blockedReason;
+  return option;
+}
 
 function toEndpointOption(endpoint: EndpointView): EndpointOption {
   const parsed = endpoint.lastEventAt === null ? Number.NaN : Date.parse(endpoint.lastEventAt);
@@ -44,13 +50,14 @@ export function registerStartCommand(program: Command, io: CliIo): void {
     const ctx = createCliContext(io);
     const project = await ctx.project();
     const { client } = await ctx.connect();
-    const [settings, endpoints] = await Promise.all([
+    const [settings, endpoints, profiles] = await Promise.all([
       client.getSettings(project.id),
       client.listEndpoints(project.id),
+      client.listProfiles(),
     ]);
     const parsed = parseNewArgv(cmd.args, {
       last: settings.lastSetup,
-      profiles: CLEAN_PROFILES,
+      profiles: profiles.map(toProfileOption),
       endpoints: endpoints.map(toEndpointOption),
     });
     rejectProblems(io, parsed.tokens);

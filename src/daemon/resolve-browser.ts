@@ -1,32 +1,58 @@
-import { existsSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import type { ProfileView } from '../core/api.ts';
 import { TerrificError } from '../core/errors.ts';
 import { findInstalledBrowsers } from '../recorder/browsers.ts';
 import type { LaunchOptions } from '../recorder/launch.ts';
+import {
+  type BrowserProfile,
+  browserDisplayName,
+  discoverProfiles,
+  toLaunchOptions,
+} from '../recorder/profiles.ts';
 
-const BROWSER_ORDER = ['chrome', 'edge', 'chromium', 'comet'] as const;
-
-export function resolveCleanBrowser(profile: string, headless: boolean): LaunchOptions {
-  if (profile !== 'clean') {
-    throw new TerrificError('USAGE', 'Browser profiles other than "clean" are not available yet.');
+function readLocalState(path: string): string | null {
+  try {
+    return readFileSync(path, 'utf8');
+  } catch {
+    return null;
   }
-  const found = findInstalledBrowsers({
-    platform: process.platform,
-    env: process.env,
-    exists: existsSync,
+}
+
+export function discoverMachineProfiles(): BrowserProfile[] {
+  return discoverProfiles({
+    browsers: findInstalledBrowsers({
+      platform: process.platform,
+      env: process.env,
+      exists: existsSync,
+    }),
+    readFile: readLocalState,
   });
-  for (const id of BROWSER_ORDER) {
-    const match = found.find((browser) => browser.id === id);
-    if (match !== undefined) {
-      return {
-        executablePath: match.executablePath,
-        userDataDir: null,
-        headless,
-      };
-    }
+}
+
+export function listProfileViews(): ProfileView[] {
+  return discoverMachineProfiles().map((profile) => ({
+    slug: profile.slug,
+    label: profile.label,
+    detail: profile.detail,
+    browser: browserDisplayName(profile.browserId),
+    blockedReason: profile.blockedReason,
+  }));
+}
+
+export function resolveBrowserProfile(profile: string, headless: boolean): LaunchOptions {
+  const found = discoverMachineProfiles().find((item) => item.slug === profile);
+  if (found === undefined) {
+    throw new TerrificError(
+      'USAGE',
+      `No browser profile called "${profile}". Run terrific-cli profiles to list them.`,
+    );
   }
-  throw new TerrificError('INTERNAL', 'No Chromium-based browser found. Install Chrome or Edge.');
+  if (found.blockedReason !== null) {
+    throw new TerrificError('USAGE', found.blockedReason);
+  }
+  return toLaunchOptions(found, headless);
 }
 
 export function defaultResolveBrowser(profile: string): LaunchOptions {
-  return resolveCleanBrowser(profile, false);
+  return resolveBrowserProfile(profile, false);
 }

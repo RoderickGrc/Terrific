@@ -9,7 +9,7 @@ import { writeJsonFile } from '../store/json-file.ts';
 import { createProjectStore } from '../store/projects.ts';
 import { createRouter, mapError, type Router, sendJson } from './http.ts';
 import { createIngestService, type IngestHooks, type IngestService } from './ingest-service.ts';
-import { defaultResolveBrowser } from './resolve-browser.ts';
+import { defaultResolveBrowser, listProfileViews } from './resolve-browser.ts';
 import { registerCoreRoutes } from './routes-core.ts';
 import { registerIngestRoutes } from './routes-ingest.ts';
 import { registerReadingRoutes } from './routes-reading.ts';
@@ -196,6 +196,7 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     getPort: () => runtime.port,
     startedAt,
     requestShutdown,
+    listProfiles: listProfileViews,
   });
   registerIngestRoutes(router, { ingest, hub });
   registerSessionRoutes(router, {

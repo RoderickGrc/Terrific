@@ -47,7 +47,12 @@ function forbiddenEdges(files: Map<string, string>): string[] {
       // `daemon run` is the only CLI command that starts the HTTP server; short
       // commands must not load Playwright. Only a dynamic import from this file.
       const daemonRun = posix === 'cli/commands/daemon.ts' && dest === 'daemon' && dynamic;
-      if (daemonRun) continue;
+      // Doctor lists browsers without starting the daemon or loading Playwright.
+      const doctorRecorder =
+        (posix === 'cli/doctor-checks.ts' || posix === 'cli/commands/doctor.ts') &&
+        dest === 'recorder' &&
+        dynamic;
+      if (daemonRun || doctorRecorder) continue;
       if ((!sameLayer && !allowed.includes(dest)) || (from === 'bin' && !dynamic)) {
         edges.push(`src/${file} -> src/${destRel}`);
       }
