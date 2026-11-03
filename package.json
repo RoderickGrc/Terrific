@@ -39,6 +39,7 @@
     "lint": "biome check --error-on-warnings .",
     "format": "biome check --write .",
     "test": "node --test \"src/**/*.test.ts\" \"test/**/*.test.ts\"",
+    "check:legacy": "node scripts/check-legacy.ts",
     "check": "npm run lint && npm run typecheck && npm test && npm run build && publint && node scripts/check-pack.ts",
     "prepack": "npm run build"
   },

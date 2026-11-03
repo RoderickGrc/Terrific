@@ -5,8 +5,9 @@ import { test } from 'node:test';
 import { fileURLToPath } from 'node:url';
 
 const LAYERS = new Set(['core', 'store', 'recorder', 'daemon', 'client', 'cli', 'tui']);
+// Imports inside the same layer are always allowed; this lists the other layers each may use.
 const ALLOWED: Record<string, readonly string[]> = {
-  core: ['core'],
+  core: [],
   store: ['core'],
   recorder: ['core'],
   daemon: ['core', 'store', 'recorder'],
@@ -41,7 +42,8 @@ function forbiddenEdges(files: Map<string, string>): string[] {
       const dest = layerOf(destRel);
       if (!dest) continue;
       const allowed = ALLOWED[from] ?? [];
-      if (!allowed.includes(dest) || (from === 'bin' && !dynamic)) {
+      const sameLayer = dest === from && from !== 'bin';
+      if ((!sameLayer && !allowed.includes(dest)) || (from === 'bin' && !dynamic)) {
         edges.push(`src/${file} -> src/${destRel}`);
       }
     }
@@ -75,6 +77,8 @@ test('forbiddenEdges reports bad imports and re-exports, and static imports in b
     new Map([
       ['cli/x.ts', "import { y } from '../daemon/y.ts';\nexport { z } from '../store/z.ts';\n"],
       ['core/a.ts', "import type { B } from './b.ts';\n"],
+      ['daemon/a.ts', "import { b } from './b.ts';\n"],
+      ['core/c.ts', "import { s } from '../store/s.ts';\n"],
       ['bin.ts', "import { run } from './cli/run.ts';\nawait import('./tui/app.ts');\n"],
     ]),
   );
@@ -83,6 +87,7 @@ test('forbiddenEdges reports bad imports and re-exports, and static imports in b
     [
       'src/cli/x.ts -> src/daemon/y.ts',
       'src/cli/x.ts -> src/store/z.ts',
+      'src/core/c.ts -> src/store/s.ts',
       'src/bin.ts -> src/cli/run.ts',
     ].join('\n'),
   );

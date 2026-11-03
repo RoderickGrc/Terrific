@@ -1,0 +1,22 @@
+[
+  {
+    "id": "ac1",
+    "type": "ACTION",
+    "message": "Clicked: \"Save\"",
+    "timestamp": "2026-03-01T10:00:01.000Z",
+    "details": "{\n  \"action\": \"click\",\n  \"selector\": \"#save\",\n  \"xpath\": \"//button\"\n}"
+  },
+  {
+    "id": "nt1",
+    "type": "NETWORK",
+    "message": "GET https://example.test/api?t=1",
+    "timestamp": "2026-03-01T10:00:02.000Z"
+  },
+  {
+    "id": "nt2",
+    "type": "NETWORK",
+    "message": "200 https://example.test/api?t=9",
+    "timestamp": "2026-03-01T10:00:03.000Z",
+    "details": "{\n  \"method\": \"GET\",\n  \"status\": 200,\n  \"url\": \"https://example.test/api?t=9\",\n  \"responseBody\": \"{\\\"ok\\\":true}\"\n}"
+  }
+]
