@@ -1,11 +1,23 @@
 import { deepEqual, equal, match, ok } from 'node:assert/strict';
-import { mkdir, mkdtemp, writeFile } from 'node:fs/promises';
+import { mkdir, mkdtemp, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
-import { test } from 'node:test';
+import { after, test } from 'node:test';
 import { createLegacyReader } from './legacy.ts';
 
 const START = '2026-03-01T10:00:00.000Z';
+
+const tempRoots: string[] = [];
+
+after(async () => {
+  await Promise.all(tempRoots.map((dir) => rm(dir, { recursive: true, force: true })));
+});
+
+async function tempRoot(prefix: string): Promise<string> {
+  const dir = await mkdtemp(join(tmpdir(), prefix));
+  tempRoots.push(dir);
+  return dir;
+}
 
 async function writeJson(path: string, value: unknown): Promise<void> {
   await mkdir(dirname(path), { recursive: true });
@@ -19,7 +31,7 @@ async function sessionDir(root: string, folder: string): Promise<string> {
 }
 
 test('legacy reader lists stores, maps status, and reads events by authority', async () => {
-  const dataRoot = await mkdtemp(join(tmpdir(), 'legacy-reader-'));
+  const dataRoot = await tempRoot('legacy-reader-');
   const shopTerrific = join(dataRoot, 'Work', 'Shop-Frontend', '.terrific');
   const shopSessions = join(shopTerrific, 'sessions');
   const globalSessions = join(dataRoot, 'sessions');
@@ -187,7 +199,7 @@ test('legacy reader lists stores, maps status, and reads events by authority', a
 });
 
 test('readSession recovers a truncated events.json and counts an unreadable file', async () => {
-  const dataRoot = await mkdtemp(join(tmpdir(), 'legacy-recover-'));
+  const dataRoot = await tempRoot('legacy-recover-');
   const sessionsDir = join(dataRoot, 'sessions');
   await mkdir(sessionsDir, { recursive: true });
 
@@ -241,7 +253,7 @@ test('readSession recovers a truncated events.json and counts an unreadable file
 });
 
 test('malformed workspaces.json yields no workspace stores', async () => {
-  const dataRoot = await mkdtemp(join(tmpdir(), 'legacy-badws-'));
+  const dataRoot = await tempRoot('legacy-badws-');
   await mkdir(join(dataRoot, 'sessions'), { recursive: true });
   await writeFile(join(dataRoot, 'workspaces.json'), '{ not json', 'utf8');
   const reader = createLegacyReader({ dataRoot });
