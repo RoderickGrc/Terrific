@@ -1,30 +1,9 @@
 import { type Command, CommanderError } from 'commander';
-import type { EndpointView, ProfileView } from '../../core/api.ts';
 import { parseNewArgv } from '../../core/new-command.ts';
-import type { EndpointOption, ProfileOption } from '../../core/setup.ts';
+import { toEndpointOption, toProfileOption } from '../../core/view-options.ts';
 import { createCliContext } from '../context.ts';
 import type { CliIo } from '../io.ts';
 import { addJsonOption, printJson, printLine, wantsJson } from '../output.ts';
-
-function toProfileOption(profile: ProfileView): ProfileOption {
-  const option: ProfileOption = {
-    slug: profile.slug,
-    label: profile.label,
-    detail: profile.detail,
-  };
-  if (profile.blockedReason !== null) option.blockedReason = profile.blockedReason;
-  return option;
-}
-
-function toEndpointOption(endpoint: EndpointView): EndpointOption {
-  const parsed = endpoint.lastEventAt === null ? Number.NaN : Date.parse(endpoint.lastEventAt);
-  return {
-    name: endpoint.name,
-    state: endpoint.state,
-    eventCount: endpoint.eventCount,
-    lastEventAt: Number.isFinite(parsed) ? parsed : null,
-  };
-}
 
 function rejectProblems(io: CliIo, tokens: ReturnType<typeof parseNewArgv>['tokens']): void {
   let found = false;

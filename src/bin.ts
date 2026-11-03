@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 // Everything loads lazily so `--version` and short commands stay fast.
-const [{ runCli }, { processIo }] = await Promise.all([
-  import('./cli/program.ts'),
-  import('./cli/io.ts'),
-]);
-
 const argv = process.argv;
-// The TUI opens here once it exists; until then no arguments shows the help.
-const args = argv.length <= 2 ? [...argv, '--help'] : argv;
-process.exitCode = await runCli(args, processIo());
+const bare = argv.length <= 2;
+const { processIo } = await import('./cli/io.ts');
+const io = processIo();
+
+if (bare && process.stdin.isTTY && process.stdout.isTTY) {
+  const { runTui } = await import('./tui/run.ts');
+  process.exitCode = await runTui(io);
+} else {
+  // Without a terminal (an agent or a pipe) the bare command prints the help instead of waiting for keys.
+  const { runCli } = await import('./cli/program.ts');
+  process.exitCode = await runCli(bare ? [...argv, '--help'] : argv, io);
+}

@@ -13,3 +13,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `TERRIFIC_HEADLESS=1` for `daemon run`
 - Real browser profiles from each installed browser's `Local State`, `terrific-cli profiles`, and `GET /v1/profiles`
 - `terrific-cli doctor` for Node, browser, data root, daemon, port, legacy stores and profiles
+- Interactive TUI: `terrific-cli` with no arguments in a terminal opens home, the `/new` assistant and confirmation, the live log, the stop confirmation, the summary, `/sessions`, `/ingest`, `/settings` and `/help`; without a terminal it prints the help

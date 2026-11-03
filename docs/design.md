@@ -35,7 +35,7 @@ terrific-cli is a clean rewrite of Terrific as a separate project. It becomes th
 | Following a session | Both a snapshot (`events`, `context`) and a live stream (`--follow`) |
 | Ingest endpoints | Named, project-scoped, independent of sessions, with a reserved URL. Each session links to at most one endpoint. 24 h without events closes one; reopening keeps the URL |
 | MCP | Replaced by the CLI. terrific-cli ships no MCP server |
-| TUI technology | pi-tui, pending a spike (section 9) |
+| TUI technology | pi-tui (section 9) |
 
 ## 2. Interactive TUI
 
@@ -348,9 +348,11 @@ Rules: `core` imports nothing else. `store` and `recorder` know nothing about HT
 - **Restart behavior.** On startup the daemon marks sessions that were recording as `interrupted`. Endpoints keep their state and URL; the 24 h idle clock continues from `lastEventAt`.
 - **Browser profiles.** A profile is `{ browser, executablePath, userDataDir, profileDirectory, slug }`, launched as a persistent context with a dynamic viewport. `terrific-cli profiles` lists what it finds on the machine and marks the ones it cannot use, with the reason. See R2.
 
-## 9. TUI technology (pending)
+## 9. TUI technology
 
-Proposed: `@earendil-works/pi-tui` with its alternate-screen renderer, confirmed or rejected by the spike in step 1 of `docs/plan.md`. Requirements from the screens in section 2: fixed header and input with a scrolling log in between, around 10 updates per second without flicker, pickers, a palette and the `/new` assistant redrawing on every keystroke with the caret position, function keys, and raw keyboard input that can tell Ctrl+Enter from Enter on Windows Terminal. Candidates: `@earendil-works/pi-tui` (pi's TUI library, differential rendering), Ink, or raw ANSI like anygent's ask webchat renderer. A one-day spike on Windows Terminal, testing key handling and redraw, decides it.
+Chosen: `@earendil-works/pi-tui` with its alternate-screen renderer (`TuiAltScreen`). The TUI is one component that draws the whole screen; pi-tui supplies the differential renderer, key parsing (including the Kitty and modifyOtherKeys forms of Ctrl+Enter and Ctrl+Shift+Enter) and the clipboard. The key spike of step 1 was not run by hand in Windows Terminal, so Ctrl+Shift+Enter there stays risk R1, with `/flag` as the fallback.
+
+Requirements it meets from the screens in section 2: fixed header and input with a scrolling log in between, around 10 updates per second without flicker, pickers, a palette and the `/new` assistant redrawing on every keystroke with the caret position, function keys, and raw keyboard input that can tell Ctrl+Enter from Enter. Tests drive the real renderer through a headless xterm at 110x34 and 80x24.
 
 ## 10. Risks
 
