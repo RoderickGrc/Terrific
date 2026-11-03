@@ -38,8 +38,13 @@ export type ProjectView = {
   lastOpenedAt: string;
 };
 
+/** Bump when the daemon API changes shape, so clients restart a daemon left running from an older build. */
+export const API_VERSION = 2;
+
 export type HealthView = {
   appVersion: string;
+  /** Missing on daemons older than API_VERSION 2. */
+  apiVersion?: number;
   pid: number;
   port: number;
   startedAt: string;

@@ -202,7 +202,13 @@ export function createFakeDaemon(): FakeDaemon {
   }
 
   const client: DaemonClient = {
-    health: async () => ({ appVersion: '0.0.0', pid: 1, port: 4569, startedAt: '' }),
+    health: async () => ({
+      appVersion: '0.0.0',
+      apiVersion: 2,
+      pid: 1,
+      port: 4569,
+      startedAt: '',
+    }),
     listProfiles: async () => profiles,
     listBrowsers: async () => [
       { id: 'chrome', name: 'Google Chrome' },

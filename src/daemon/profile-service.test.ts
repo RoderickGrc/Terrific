@@ -29,12 +29,15 @@ class FakeWindow {
   pageOpen = true;
   closed = false;
   visited: string[] = [];
+  /** How many times the service read the state. */
+  reads = 0;
 
   launched(): LaunchedBrowser {
     const context = Object.assign(this.context, {
       pages: () => (this.pageOpen ? [this.page] : []),
       storageState: async () => {
         if (this.closed) throw new Error('closed');
+        this.reads += 1;
         return this.state;
       },
     });
@@ -82,7 +85,14 @@ async function service() {
   return { profiles, store, launches, windows };
 }
 
-const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+/** Polls until `done` holds, so timing under a loaded machine does not fail the test. */
+async function until(done: () => boolean | Promise<boolean>): Promise<void> {
+  const deadline = Date.now() + 2000;
+  while (!(await done())) {
+    if (Date.now() > deadline) throw new Error('condition not reached in 2 s');
+    await new Promise((resolve) => setTimeout(resolve, 5));
+  }
+}
 
 test('list shows clean on the first installed browser, then the profiles terrific keeps', async () => {
   const { profiles } = await service();
@@ -152,10 +162,12 @@ test('closing the window keeps the last state read while it was open', async () 
   const window = windows[0];
   if (window === undefined) throw new Error('no window');
   window.state = { cookies: [], origins: [{ origin: 'https://app.test', localStorage: [] }] };
-  await wait(40);
+  const before = window.reads;
+  await until(() => window.reads > before);
   window.closeWindow();
-  await wait(20);
-  equal((await profiles.list()).find((view) => view.slug === 'qa')?.open, false);
+  await until(
+    async () => (await profiles.list()).find((view) => view.slug === 'qa')?.open === false,
+  );
   equal(await readFile(store.paths('qa').stateFile, 'utf8'), JSON.stringify(window.state));
 });
 

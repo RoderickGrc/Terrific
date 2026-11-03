@@ -1,5 +1,5 @@
 import { isAbsolute } from 'node:path';
-import type { HealthView, ProjectView } from '../core/api.ts';
+import { API_VERSION, type HealthView, type ProjectView } from '../core/api.ts';
 import { TerrificError } from '../core/errors.ts';
 import { isRecord, isString } from '../core/validate.ts';
 import type { createProjectStore } from '../store/projects.ts';
@@ -41,6 +41,7 @@ export function registerCoreRoutes(router: Router, deps: CoreRouteDeps): void {
   router.route('GET', '/v1/health', (ctx) => {
     const body: HealthView = {
       appVersion: deps.appVersion,
+      apiVersion: API_VERSION,
       pid: deps.pid,
       port: deps.getPort(),
       startedAt: deps.startedAt,

@@ -1,6 +1,6 @@
 import { spawn } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
-import { parseDaemonPort } from '../core/api.ts';
+import { API_VERSION, parseDaemonPort } from '../core/api.ts';
 import { dataPaths } from '../core/data-root.ts';
 import { TerrificError } from '../core/errors.ts';
 import { isRecord } from '../core/validate.ts';
@@ -66,17 +66,32 @@ async function readDaemonPid(daemonFile: string): Promise<number | undefined> {
   }
 }
 
-async function probe(port: number, token: string): Promise<DaemonClient | undefined> {
+type Probe = { client: DaemonClient; current: boolean };
+
+async function probe(port: number, token: string): Promise<Probe | undefined> {
   const client = createDaemonClient({
     baseUrl: `http://127.0.0.1:${port}`,
     token,
   });
   try {
-    await client.health();
-    return client;
+    const health = await client.health();
+    return { client, current: health.apiVersion === API_VERSION };
   } catch {
     return undefined;
   }
+}
+
+// A daemon left running from an older build answers with an older API; replace it unless it is recording.
+async function retire(client: DaemonClient): Promise<void> {
+  const status = await client.status();
+  const recording = status.sessions.length;
+  if (recording > 0) {
+    throw new TerrificError(
+      'CONFLICT',
+      `The running daemon is from an older terrific and is recording ${recording === 1 ? '1 session' : `${recording} sessions`}. Stop ${recording === 1 ? 'it' : 'them'}, then run terrific daemon stop.`,
+    );
+  }
+  await client.shutdown();
 }
 
 function spawnDaemon(
@@ -112,18 +127,26 @@ export async function connectDaemon(options: ConnectDaemonOptions): Promise<Conn
   const port = parseDaemonPort(options.env.TERRIFIC_PORT);
   const paths = dataPaths(options.dataRoot);
 
-  const tryConnect = async (): Promise<Omit<ConnectedDaemon, 'started'> | undefined> => {
+  const tryConnect = async (): Promise<(Omit<ConnectedDaemon, 'started'> & Probe) | undefined> => {
     const token = await readToken(paths.tokenFile);
     if (token === undefined) return undefined;
-    const client = await probe(port, token);
-    if (client === undefined) return undefined;
-    return { client, port, token };
+    const found = await probe(port, token);
+    if (found === undefined) return undefined;
+    return { ...found, port, token };
   };
 
   const existing = await tryConnect();
-  if (existing !== undefined) return { ...existing, started: false };
+  if (existing !== undefined && (existing.current || !options.autoStart)) {
+    return { client: existing.client, port, token: existing.token, started: false };
+  }
 
   if (!options.autoStart) throw new TerrificError('INTERNAL', UNREACHABLE);
+
+  if (existing !== undefined) {
+    await retire(existing.client);
+    const gone = Date.now() + POLL_LIMIT_MS;
+    while ((await tryConnect()) !== undefined && Date.now() < gone) await sleep(POLL_MS);
+  }
 
   const pid = await readDaemonPid(paths.daemonFile);
   // A leftover daemon.json with a dead pid must not look like a start in progress.
@@ -133,7 +156,9 @@ export async function connectDaemon(options: ConnectDaemonOptions): Promise<Conn
   const deadline = Date.now() + POLL_LIMIT_MS;
   while (Date.now() < deadline) {
     const next = await tryConnect();
-    if (next !== undefined) return { ...next, started: !alreadySpawning };
+    if (next?.current === true) {
+      return { client: next.client, port, token: next.token, started: !alreadySpawning };
+    }
     await sleep(POLL_MS);
   }
   throw new TerrificError('INTERNAL', UNREACHABLE);

@@ -12,7 +12,7 @@ const MODE_TEXT = {
 } as const;
 
 function modeLabel(profile: ProfileView): string {
-  return profile.kind === 'clean' ? '' : profile.kind;
+  return profile.kind === 'persistent' || profile.kind === 'snapshot' ? profile.kind : '';
 }
 
 export function profilesLines(view: View, overlay: ProfilesOverlay): Line[] {

@@ -1,6 +1,7 @@
 import { match, ok } from 'node:assert/strict';
 import { spawn } from 'node:child_process';
-import { access, mkdtemp, rm } from 'node:fs/promises';
+import { access, mkdtemp, rm, writeFile } from 'node:fs/promises';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { after, test } from 'node:test';
@@ -74,4 +75,61 @@ test('daemon start spawns a detached daemon that status and stop can reach', asy
   const stopped = await run(['daemon', 'stop'], env);
   ok(stopped.code === 0, stopped.err);
   ok(!(await exists(dataPaths(home).daemonFile)), 'daemon.json should be removed after stop');
+});
+
+/** Answers like a daemon from before API_VERSION 2: health has no apiVersion. */
+async function oldDaemon(home: string, port: number, recording: number) {
+  await writeFile(dataPaths(home).tokenFile, 'old-token');
+  const requests: string[] = [];
+  const server = createServer((req, res) => {
+    requests.push(`${req.method} ${req.url}`);
+    res.setHeader('content-type', 'application/json');
+    if (req.url === '/v1/health') {
+      res.end(JSON.stringify({ appVersion: '0.0.0', pid: 1, port, startedAt: '' }));
+    } else if (req.url === '/v1/status') {
+      const sessions = Array.from({ length: recording }, (_, i) => ({ id: `s${i}` }));
+      res.end(JSON.stringify({ daemon: {}, sessions, endpoints: [] }));
+    } else if (req.url === '/v1/daemon/shutdown') {
+      res.end(JSON.stringify({ ok: true }), () => {
+        server.close();
+        server.closeAllConnections();
+      });
+    } else {
+      res.statusCode = 404;
+      res.end('{}');
+    }
+  });
+  await new Promise<void>((resolve) => server.listen(port, '127.0.0.1', resolve));
+  return { requests, close: () => new Promise((resolve) => server.close(resolve)) };
+}
+
+test('a daemon left from an older build is replaced when it records nothing', async () => {
+  const home = await tempHome();
+  const port = await freePort();
+  const env = { TERRIFIC_HOME: home, TERRIFIC_PORT: String(port), TERRIFIC_HEADLESS: '1' };
+  const old = await oldDaemon(home, port, 0);
+  daemons.push(env);
+  const listed = await run(['profiles', '--json'], env);
+  ok(listed.code === 0, listed.err);
+  ok(old.requests.includes('POST /v1/daemon/shutdown'), old.requests.join(', '));
+  const profiles = JSON.parse(listed.out) as { slug: string; kind: string }[];
+  ok(profiles.every((profile) => typeof profile.kind === 'string'));
+});
+
+test('a daemon left from an older build that is recording is kept, with a way out', async () => {
+  const home = await tempHome();
+  const port = await freePort();
+  const env = { TERRIFIC_HOME: home, TERRIFIC_PORT: String(port) };
+  const old = await oldDaemon(home, port, 1);
+  try {
+    const listed = await run(['profiles'], env);
+    ok(listed.code !== 0);
+    match(
+      listed.err,
+      /older terrific and is recording 1 session\. Stop it, then run terrific daemon stop/,
+    );
+    ok(!old.requests.includes('POST /v1/daemon/shutdown'));
+  } finally {
+    await old.close();
+  }
 });
