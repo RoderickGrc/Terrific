@@ -3,7 +3,7 @@
 Use this when the bug only happens in production, or depends on production data, config or a deployed build. Production code is never instrumented, and nothing is deployed for the investigation. Evidence comes from three sources:
 
 - a recorded browser session;
-- a console probe that the user pastes in that window;
+- a console probe that the user pastes, in that window or in their own browser;
 - optionally, the platform's log stream.
 
 ## Rules
@@ -34,23 +34,36 @@ When the network and console are not enough, write a probe for state the page do
 - which storage keys exist;
 - globals the app exposes.
 
-The probe writes `console.info('[terrific]', JSON.stringify(...))`. The session records console messages, so no network is involved.
+The user pastes the probe in the DevTools console. It reaches terrific through one of two channels:
 
-Do not post to the ingest endpoint from a public page:
+| Channel | Where the user pastes | Session | Probe sends with |
+|---|---|---|---|
+| Console | The terrific window | Browser session (step 1) | `console.info('[terrific]', JSON.stringify(...))`, recorded as console events |
+| Ingest | The user's own browser, already logged in | `terrific start "prod probe" #tck-142 --no-browser` | `fetch` to the endpoint URL |
 
-- Chrome's [Local Network Access](https://developer.chrome.com/blog/local-network-access) asks the user for permission before a public site can reach 127.0.0.1.
-- The site's CSP may also block the request.
+- **Console** needs nothing from the browser. Always use `JSON.stringify`, because objects logged directly are recorded shortened, as `{a: 1, b: Array(2)}`.
+- **Ingest** suits a bug that needs the user's real browser, extensions or login. A public page posting to 127.0.0.1 can be stopped in three places:
+  - An ad blocker answers `net::ERR_BLOCKED_BY_CLIENT`. The user disables it for the site, or uses a window without extensions.
+  - Chrome's [Local Network Access](https://developer.chrome.com/blog/local-network-access) may ask the user for permission.
+  - The site's CSP `connect-src` may refuse it.
+  - The probe reports the first answer in the console (`ingest answered 202` or `ingest blocked`). Check that line before asking for the reproduction.
 
-Always use `JSON.stringify`, because objects logged directly are recorded shortened, as `{a: 1, b: Array(2)}`.
-
-Template, adapted per diagnostic:
+Template, adapted per diagnostic. Set `URL` to the endpoint for the ingest channel, or to `null` for the console channel:
 
 ```js
-// terrific probe: paste in the DevTools console of the terrific window
+// terrific probe: paste in the DevTools console
 (() => {
+  const URL = null; // or 'INGEST_URL'
   const slug = 'overlay-on-tab-switch';
-  const t = (message, data = {}) =>
-    console.info('[terrific]', JSON.stringify({ message, diagnosticSlug: slug, data }));
+  let reported = false;
+  const report = (text) => { if (!reported) { reported = true; console.info('[terrific]', text); } };
+  const t = (message, data = {}) => {
+    const body = JSON.stringify({ message, diagnosticSlug: slug, source: 'devtools probe', timestamp: Date.now(), data });
+    if (URL === null) return console.info('[terrific]', body);
+    fetch(URL, { method: 'POST', body })
+      .then((r) => report(`ingest answered ${r.status}`))
+      .catch((e) => report(`ingest blocked ${e.name} ${e.message}`));
+  };
   const undo = [];
   const on = (target, type, fn) => {
     target.addEventListener(type, fn);
@@ -67,17 +80,20 @@ Template, adapted per diagnostic:
   watch.observe(document.body, { childList: true, subtree: true });
   undo.push(() => watch.disconnect());
   window.__terrificUndo = () => { undo.forEach((fn) => fn()); t('probe removed'); };
-  t('probe installed', { path: location.pathname, storageKeys: Object.keys(localStorage) });
+  // Key names can carry user and record ids, so only their prefixes.
+  const storage = [...new Set(Object.keys(localStorage).map((key) => key.split(':')[0]))];
+  t('probe installed', { path: location.pathname, storage });
 })();
 ```
 
 - Log only on change, never on every mutation or frame.
 - To time a function the app exposes, wrap it and log its duration and outcome, never its arguments.
+- Paths and key names can carry ids. Send prefixes or counts unless the id is the evidence.
 
 Steps for the user:
 
-1. In the terrific window, press F12 and open Console. The first time, Chrome may ask them to type `allow pasting`.
-2. Paste the probe, press Enter, and check for a `probe installed` line.
+1. Press F12 and open Console. The first time, Chrome may ask them to type `allow pasting`.
+2. Paste the probe, press Enter, and check for `probe installed` (console channel) or `ingest answered 202` (ingest channel).
 3. Reproduce, and say when they are done.
 
 A reload drops the probe. If the reproduction needs a reload or navigates to a full page, the user has two options:
@@ -87,13 +103,12 @@ A reload drops the probe. If the reproduction needs a reload or navigates to a f
 
 To remove the probe without a reload, run `__terrificUndo()`.
 
-Read the probe's events:
+Read the probe's events with `--json`, because the text output leaves out `data`:
 
 ```sh
-terrific events <id> --type console
+terrific events <id> --type console --json   # console channel
+terrific events <id> --type ingest --json    # ingest channel
 ```
-
-`events.jsonl` in the session folder contains every `[terrific]` line, so grep it when you need them all.
 
 ## 3. Backend logs (optional)
 
