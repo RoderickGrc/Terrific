@@ -437,10 +437,7 @@ export class TuiApp implements Component, Focusable {
       ]);
     }
     // Home already shows /new beside the input and /sessions above the list.
-    return hints(theme, [
-      ['/', 'commands'],
-      ['Ctrl+C', 'quit'],
-    ]);
+    return '';
   }
 
   private toastLine(): Line {

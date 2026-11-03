@@ -89,7 +89,7 @@ describe('tui', () => {
       match(text, /checkout flow {2}s-checkout/);
       match(text, /2 bugs/);
       match(text, /Type a command\. \/new starts a session/);
-      match(lines[rows - 2] ?? '', /^ *\/ commands {2}Ctrl\+C quit *$/);
+      equal((lines[rows - 2] ?? '').trim(), '');
       await quit(h);
     });
 
@@ -343,7 +343,8 @@ describe('tui', () => {
     h.term.resize(80, 24);
     const lines = await h.term.lines();
     match(lines[0] ?? '', /^ Terrific {2}acme-shop .*no session $/);
-    match(lines[22] ?? '', /\/ commands {2}Ctrl\+C quit/);
+    match(lines[21] ?? '', /\/new starts from/);
+    equal((lines[22] ?? '').trim(), '');
     await quit(h);
   });
 });
