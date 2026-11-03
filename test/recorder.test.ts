@@ -220,3 +220,32 @@ test('recorder captures actions, network, console, navigation, snapshot and scre
     await site.close();
   }
 });
+
+test('closing the browser from outside resolves closed with browser-closed', {
+  timeout: 30_000,
+}, async (t) => {
+  const browser = findInstalledBrowsers({
+    platform: process.platform,
+    env: process.env,
+    exists: existsSync,
+  })[0];
+  if (browser === undefined) {
+    t.skip('no Chromium-based browser installed');
+    return;
+  }
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: '',
+    record: { actions: true, network: true, console: true },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: () => {},
+  });
+  // Closing the context is what the tester closing the browser window looks like to Playwright.
+  await recording.context.close();
+  equal(await recording.closed, 'browser-closed');
+  await recording.stop();
+  equal(await recording.closed, 'browser-closed');
+});

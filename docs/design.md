@@ -162,7 +162,7 @@ Keys: Enter opens the summary, Ctrl+F pins, Ctrl+R renames in place, Ctrl+D dele
 | Ctrl+D | Delete after a second Ctrl+D; the URL stops working for good |
 | Esc | Close |
 
-The endpoint linked to the recording session cannot be closed or deleted until the session stops.
+The endpoint linked to the recording session cannot be closed, renamed or deleted until the session stops.
 
 ### Keys
 

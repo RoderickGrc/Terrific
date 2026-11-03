@@ -4,13 +4,17 @@ import { dirname } from 'node:path';
 import { DEFAULT_DAEMON_PORT } from '../core/api.ts';
 import { isTerrificError, TerrificError } from '../core/errors.ts';
 import { type RandomSource, randomId } from '../core/ids.ts';
+import type { LaunchOptions } from '../recorder/launch.ts';
 import { dataPaths } from '../store/data-root.ts';
 import { writeJsonFile } from '../store/json-file.ts';
 import { createProjectStore } from '../store/projects.ts';
 import { createRouter, mapError, type Router, sendJson } from './http.ts';
 import { createIngestService, type IngestHooks, type IngestService } from './ingest-service.ts';
+import { defaultResolveBrowser } from './resolve-browser.ts';
 import { registerCoreRoutes } from './routes-core.ts';
 import { registerIngestRoutes } from './routes-ingest.ts';
+import { registerSessionRoutes } from './routes-sessions.ts';
+import { createSessionService, type SessionService } from './session-service.ts';
 import { createStreamHub, type StreamHub } from './stream-hub.ts';
 
 export { DEFAULT_DAEMON_PORT };
@@ -21,9 +25,9 @@ export type DaemonLog = {
 };
 
 export type DaemonServices = {
-  // Stage 5b registers session routes on router and replaces hooks.isLinked / hooks.onIngest.
   hooks: IngestHooks;
   ingest: IngestService;
+  sessions: SessionService;
   projects: ReturnType<typeof createProjectStore>;
   hub: StreamHub;
   router: Router;
@@ -34,7 +38,7 @@ export type DaemonHandle = {
   token: string;
   url: string;
   runMaintenance(): Promise<void>;
-  close(): Promise<void>;
+  close(options?: { stopSessions?: boolean }): Promise<void>;
   services: DaemonServices;
 };
 
@@ -45,6 +49,7 @@ export type StartDaemonOptions = {
   now: () => Date;
   random: RandomSource;
   maintenanceIntervalMs?: number;
+  resolveBrowser?: (profile: string) => LaunchOptions;
 };
 
 type DaemonFile = {
@@ -162,6 +167,16 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     getPort: () => runtime.port,
     hooks,
   });
+  const sessions = createSessionService({
+    projects,
+    ingest,
+    hub,
+    now: options.now,
+    random: options.random,
+    resolveBrowser: options.resolveBrowser ?? defaultResolveBrowser,
+  });
+  hooks.isLinked = (projectId, name) => sessions.isLinked(projectId, name);
+  hooks.onIngest = (projectId, name, event) => sessions.onIngest(projectId, name, event);
   const router = createRouter({
     token,
     getPort: () => runtime.port,
@@ -175,6 +190,17 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     startedAt,
   });
   registerIngestRoutes(router, { ingest, hub });
+  registerSessionRoutes(router, {
+    sessions,
+    ingest,
+    projects,
+    hub,
+    appVersion: options.appVersion,
+    pid: process.pid,
+    getPort: () => runtime.port,
+    startedAt,
+  });
+  await sessions.recoverInterrupted();
   const server = createServer((req, res) => {
     void router.handle(req, res).catch((error: unknown) => {
       if (!isTerrificError(error)) {
@@ -210,7 +236,7 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     });
   }, intervalMs);
   timer.unref();
-  const services: DaemonServices = { hooks, ingest, projects, hub, router };
+  const services: DaemonServices = { hooks, ingest, sessions, projects, hub, router };
   return {
     port: runtime.port,
     token,
@@ -219,8 +245,9 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     async runMaintenance() {
       await ingest.closeIdle();
     },
-    async close() {
+    async close(closeOptions) {
       clearInterval(timer);
+      if (closeOptions?.stopSessions !== false) await sessions.stopAll();
       router.closeConnections();
       hub.closeAll();
       server.closeAllConnections();

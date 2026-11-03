@@ -149,6 +149,8 @@ export async function readJsonBody(
     }
     chunks.push(buf);
   }
+  // An empty body reaches handlers as undefined, so body-less calls like `stop` need no `{}`.
+  if (size === 0) return undefined;
   try {
     return JSON.parse(Buffer.concat(chunks).toString('utf8')) as unknown;
   } catch {

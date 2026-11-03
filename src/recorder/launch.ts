@@ -44,7 +44,7 @@ export async function launchBrowser(options: LaunchOptions): Promise<LaunchedBro
     });
   } catch (error) {
     if (ephemeral) {
-      await rm(userDataDir, { recursive: true, force: true });
+      await removeProfileDir(userDataDir);
     }
     throw new TerrificError('INTERNAL', launchMessage(options.executablePath, error));
   }
@@ -64,9 +64,18 @@ export async function launchBrowser(options: LaunchOptions): Promise<LaunchedBro
       } catch {
         // The user may already have closed the window.
       }
-      if (ephemeral) {
-        await rm(userDataDir, { recursive: true, force: true });
-      }
+      if (ephemeral) await removeProfileDir(userDataDir);
     },
   };
+}
+
+// Chrome keeps writing to its profile for a moment after the context closes, which makes
+// Windows report EBUSY. Retry briefly, then leave the folder to the OS temp cleanup rather
+// than fail a stop over a throwaway directory.
+async function removeProfileDir(dir: string): Promise<void> {
+  try {
+    await rm(dir, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+  } catch {
+    // Left in the temp folder; nothing depends on it.
+  }
 }

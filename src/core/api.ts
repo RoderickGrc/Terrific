@@ -1,5 +1,7 @@
 import type { ErrorCode } from './errors.ts';
-import type { EndpointClosedReason, EndpointState } from './session.ts';
+import type { TerrificEvent } from './events.ts';
+import type { EndpointClosedReason, EndpointState, SessionStatus } from './session.ts';
+import type { SessionSetup } from './setup.ts';
 
 export const DEFAULT_DAEMON_PORT = 4569;
 export const MAX_BODY_BYTES = 1024 * 1024;
@@ -54,6 +56,58 @@ export type OkResponse = {
   ok: true;
 };
 
+export type SessionFiles = {
+  context: string;
+  events: string;
+  screenshots: string;
+};
+
+export type SessionView = {
+  id: string;
+  name: string | null;
+  status: SessionStatus;
+  startedAt: string;
+  stoppedAt: string | null;
+  projectId: string;
+  projectPath: string;
+  setup: SessionSetup;
+  endpoint: EndpointView | null;
+  legacy: boolean;
+  folder: string;
+  files: SessionFiles;
+};
+
+export type StartSessionRequest = {
+  setup: SessionSetup;
+  name: string | null;
+};
+
+export type StopSessionRequest = {
+  name?: string | null;
+};
+
+export type MarkRequest = {
+  kind: 'note' | 'bug' | 'flag';
+  text: string | null;
+  author?: 'tester' | 'agent';
+};
+
+export type MarkResponse = {
+  id: string;
+  t: number;
+};
+
+export type CaptureResponse = {
+  event: TerrificEvent;
+  file?: string;
+};
+
+export type StatusView = {
+  daemon: HealthView;
+  sessions: SessionView[];
+  endpoints: (EndpointView & { projectId: string })[];
+};
+
 export function ingestUrl(port: number, token: string): string {
   return `http://127.0.0.1:${port}/ingest/${token}`;
 }
@@ -96,4 +150,32 @@ export function endpointStreamPath(projectId: string, name: string): string {
 
 export function ingestPath(token: string): string {
   return `/ingest/${token}`;
+}
+
+export function sessionsPath(projectId: string): string {
+  return `/v1/projects/${projectId}/sessions`;
+}
+
+export function sessionStopPath(id: string): string {
+  return `/v1/sessions/${id}/stop`;
+}
+
+export function sessionMarksPath(id: string): string {
+  return `/v1/sessions/${id}/marks`;
+}
+
+export function sessionScreenshotPath(id: string): string {
+  return `/v1/sessions/${id}/screenshot`;
+}
+
+export function sessionSnapshotPath(id: string): string {
+  return `/v1/sessions/${id}/snapshot`;
+}
+
+export function sessionStreamPath(id: string): string {
+  return `/v1/sessions/${id}/stream`;
+}
+
+export function statusPath(): string {
+  return '/v1/status';
 }

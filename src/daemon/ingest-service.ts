@@ -97,12 +97,25 @@ export async function createIngestService(options: {
     return toView(record);
   }
 
+  // A recording session finds its endpoint by name and expects it open, so closing,
+  // renaming or deleting it would silently cut the session's ingest feed.
+  function assertNotLinked(projectId: string, name: string): void {
+    if (options.hooks.isLinked(projectId, name)) {
+      throw new TerrificError(
+        'CONFLICT',
+        `Endpoint "${name}" is linked to a recording session. Stop the session first.`,
+      );
+    }
+  }
+
   async function down(projectId: string, name: string): Promise<EndpointView> {
+    assertNotLinked(projectId, name);
     const store = await storeFor(projectId);
     return toView(await store.setState(name, 'closed', 'manual'));
   }
 
   async function rename(projectId: string, name: string, next: string): Promise<EndpointView> {
+    assertNotLinked(projectId, name);
     const store = await storeFor(projectId);
     const record = await store.rename(name, next);
     tokens.set(record.token, { projectId, name: record.name });
@@ -110,9 +123,7 @@ export async function createIngestService(options: {
   }
 
   async function remove(projectId: string, name: string): Promise<void> {
-    if (options.hooks.isLinked(projectId, name)) {
-      throw new TerrificError('CONFLICT', `Endpoint "${name}" is linked to a recording session.`);
-    }
+    assertNotLinked(projectId, name);
     const store = await storeFor(projectId);
     const record = await store.get(name);
     await store.remove(name);
