@@ -7,7 +7,6 @@ import { after, test } from 'node:test';
 import type { BrowserContext, Page } from 'playwright-core';
 import type { InstalledBrowser } from '../recorder/browsers.ts';
 import type { LaunchedBrowser, LaunchOptions } from '../recorder/launch.ts';
-import type { BrowserProfile } from '../recorder/profiles.ts';
 import { createProfileStore } from '../store/profiles.ts';
 import { createProfileService } from './profile-service.ts';
 
@@ -20,31 +19,6 @@ after(async () => {
 const BROWSERS: InstalledBrowser[] = [
   { id: 'edge', name: 'Microsoft Edge', executablePath: '/edge', userDataRoot: '/edge-data' },
   { id: 'comet', name: 'Comet', executablePath: '/comet', userDataRoot: '/comet-data' },
-];
-
-const MACHINE: BrowserProfile[] = [
-  {
-    id: 'clean',
-    slug: 'clean',
-    label: 'Clean browser',
-    detail: 'fresh storage, nothing saved',
-    browserId: 'edge',
-    executablePath: '/edge',
-    userDataDir: null,
-    profileDirectory: null,
-    blockedReason: null,
-  },
-  {
-    id: 'comet:Profile 4',
-    slug: 'testing',
-    label: 'Testing',
-    detail: 'Comet · Profile 4',
-    browserId: 'comet',
-    executablePath: '/comet',
-    userDataDir: '/comet-data',
-    profileDirectory: 'Profile 4',
-    blockedReason: 'Comet blocks automation of its own profiles',
-  },
 ];
 
 /** A window with one tab whose storage state the test sets. */
@@ -96,7 +70,6 @@ async function service() {
   const profiles = createProfileService({
     store,
     headless: true,
-    machineProfiles: () => MACHINE,
     installedBrowsers: () => BROWSERS,
     launch: async (options) => {
       launches.push(options);
@@ -111,7 +84,7 @@ async function service() {
 
 const wait = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
 
-test('list puts clean first, then owned profiles, then browser profiles renamed on a clash', async () => {
+test('list shows clean on the first installed browser, then the profiles terrific keeps', async () => {
   const { profiles } = await service();
   await profiles.create({ name: 'testing', mode: 'persistent', browser: 'comet' });
   await profiles.create({ name: 'qa', mode: 'snapshot' });
@@ -121,9 +94,12 @@ test('list puts clean first, then owned profiles, then browser profiles renamed 
       ['clean', 'clean', 'fresh storage, nothing saved'],
       ['qa', 'snapshot', 'Microsoft Edge · nothing saved yet'],
       ['testing', 'persistent', 'Comet · keeps logins and data'],
-      ['testing-comet', 'browser', 'Comet · Profile 4'],
     ],
   );
+  deepEqual(profiles.browsers(), [
+    { id: 'edge', name: 'Microsoft Edge' },
+    { id: 'comet', name: 'Comet' },
+  ]);
 });
 
 test('resolve gives persistent profiles their folder and snapshot profiles their state file', async () => {
@@ -137,11 +113,14 @@ test('resolve gives persistent profiles their folder and snapshot profiles their
   const qa = await profiles.resolve('qa');
   equal(qa.userDataDir, null);
   equal(qa.storageState, store.paths('qa').stateFile);
-  await rejects(profiles.resolve('nope'), /No browser profile called "nope"/);
   await rejects(
-    profiles.resolve('testing'),
-    /Comet blocks automation.*terrific profiles add <name> --browser comet/,
+    profiles.resolve('nope'),
+    /No profile called "nope"\. Create it with: terrific profiles add nope/,
   );
+  const clean = await profiles.resolve('clean');
+  equal(clean.executablePath, '/edge');
+  equal(clean.userDataDir, null);
+  equal(clean.storageState, undefined);
   await rejects(
     profiles.create({ name: 'x', mode: 'persistent', browser: 'chrome' }),
     /Google Chrome is not installed/,
@@ -161,7 +140,7 @@ test('a snapshot profile saves its state when closed from the CLI', async () => 
   window.state = { cookies: [{ name: 'sid' }], origins: [] };
   const closed = await profiles.close('qa');
   equal(closed.open, false);
-  match(closed.detail, /starts from state saved 2026-11-03/);
+  match(closed.detail, /Microsoft Edge · saved 2026-11-03/);
   equal(await readFile(store.paths('qa').stateFile, 'utf8'), JSON.stringify(window.state));
   equal(window.closed, true);
 });

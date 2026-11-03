@@ -1,4 +1,4 @@
-import type { CreateProfileRequest, ProfileView } from '../core/api.ts';
+import type { BrowserView, CreateProfileRequest, ProfileView } from '../core/api.ts';
 import { TerrificError } from '../core/errors.ts';
 import { BROWSER_IDS, type BrowserId, type ProfileRecord } from '../core/profiles.ts';
 import { localMinute, normalizeUrl } from '../core/setup.ts';
@@ -9,11 +9,13 @@ import {
   type LaunchedBrowser,
   type LaunchOptions,
 } from '../recorder/launch.ts';
-import { type BrowserProfile, browserDisplayName, toLaunchOptions } from '../recorder/profiles.ts';
+import { browserDisplayName } from '../recorder/profiles.ts';
 import type { ProfileStore } from '../store/profiles.ts';
 
 export type ProfileService = {
   list(): Promise<ProfileView[]>;
+  /** Installed browsers a new profile can use. */
+  browsers(): BrowserView[];
   /** Launch options for a session that records with this profile. */
   resolve(slug: string): Promise<LaunchOptions>;
   create(request: CreateProfileRequest): Promise<ProfileView>;
@@ -38,8 +40,6 @@ type Editing = {
 export type ProfileServiceOptions = {
   store: ProfileStore;
   headless: boolean;
-  /** Clean plus the installed browsers' own profiles, with slugs. */
-  machineProfiles: () => BrowserProfile[];
   installedBrowsers: () => InstalledBrowser[];
   launch: (options: LaunchOptions) => Promise<LaunchedBrowser>;
   captureEveryMs?: number;
@@ -47,6 +47,7 @@ export type ProfileServiceOptions = {
 
 const CAPTURE_EVERY_MS = 2000;
 
+// Chrome, Edge and Comet refuse automation of their own profiles, so only clean and the profiles terrific keeps are offered.
 export function createProfileService(options: ProfileServiceOptions): ProfileService {
   const editing = new Map<string, Editing>();
 
@@ -58,18 +59,29 @@ export function createProfileService(options: ProfileServiceOptions): ProfileSer
     return found;
   }
 
-  function defaultBrowser(): BrowserId {
+  /** The first installed browser in Chrome, Edge, Chromium, Comet order. */
+  function firstBrowser(): InstalledBrowser | undefined {
     const installed = options.installedBrowsers();
-    const found = BROWSER_IDS.find((id) => installed.some((browser) => browser.id === id));
-    if (found === undefined) throw new TerrificError('USAGE', 'No supported browser is installed.');
-    return found;
+    for (const id of BROWSER_IDS) {
+      const found = installed.find((browser) => browser.id === id);
+      if (found !== undefined) return found;
+    }
+    return undefined;
+  }
+
+  function browsers(): BrowserView[] {
+    const installed = options.installedBrowsers();
+    return BROWSER_IDS.filter((id) => installed.some((browser) => browser.id === id)).map((id) => ({
+      id,
+      name: browserDisplayName(id),
+    }));
   }
 
   function detail(record: ProfileRecord): string {
     const browser = browserDisplayName(record.browser);
     if (record.mode === 'persistent') return `${browser} · keeps logins and data`;
     if (record.savedAt === null) return `${browser} · nothing saved yet`;
-    return `${browser} · starts from state saved ${localMinute(new Date(record.savedAt))}`;
+    return `${browser} · saved ${localMinute(new Date(record.savedAt))}`;
   }
 
   function managedView(record: ProfileRecord): ProfileView {
@@ -84,36 +96,24 @@ export function createProfileService(options: ProfileServiceOptions): ProfileSer
     };
   }
 
-  // Profiles terrific owns keep their name; a browser profile with the same slug gets its browser appended.
-  function machineFor(records: readonly ProfileRecord[]): BrowserProfile[] {
-    const taken = new Set(records.map((record) => record.name));
-    return options
-      .machineProfiles()
-      .map((profile) =>
-        taken.has(profile.slug)
-          ? { ...profile, slug: `${profile.slug}-${profile.browserId}` }
-          : profile,
-      );
-  }
-
-  function machineView(profile: BrowserProfile): ProfileView {
-    return {
-      slug: profile.slug,
-      label: profile.label,
-      detail: profile.detail,
-      browser: browserDisplayName(profile.browserId),
-      blockedReason: profile.blockedReason,
-      kind: profile.id === 'clean' ? 'clean' : 'browser',
-      open: false,
-    };
-  }
-
   async function list(): Promise<ProfileView[]> {
     const records = await options.store.list();
-    const machine = machineFor(records).map(machineView);
-    const clean = machine.filter((view) => view.kind === 'clean');
-    const others = machine.filter((view) => view.kind !== 'clean');
-    return [...clean, ...records.map(managedView), ...others];
+    const first = firstBrowser();
+    const clean: ProfileView[] =
+      first === undefined
+        ? []
+        : [
+            {
+              slug: 'clean',
+              label: 'Clean browser',
+              detail: 'fresh storage, nothing saved',
+              browser: browserDisplayName(first.id),
+              blockedReason: null,
+              kind: 'clean',
+              open: false,
+            },
+          ];
+    return [...clean, ...records.map(managedView)];
   }
 
   function launchOptions(record: ProfileRecord): LaunchOptions {
@@ -130,35 +130,38 @@ export function createProfileService(options: ProfileServiceOptions): ProfileSer
   }
 
   async function resolve(slug: string): Promise<LaunchOptions> {
-    const records = await options.store.list();
-    const record = records.find((item) => item.name === slug);
-    if (record !== undefined) {
-      if (record.mode === 'persistent' && editing.has(record.name)) {
-        throw new TerrificError(
-          'CONFLICT',
-          `The profile "${slug}" is open for setup. Close it first: terrific profiles close ${slug}`,
-        );
-      }
-      return launchOptions(record);
+    if (slug === 'clean') {
+      const first = firstBrowser();
+      if (first === undefined)
+        throw new TerrificError('USAGE', 'No supported browser is installed.');
+      return {
+        executablePath: first.executablePath,
+        userDataDir: null,
+        headless: options.headless,
+        browserName: browserDisplayName(first.id),
+        profileLabel: 'Clean browser',
+      };
     }
-    const found = machineFor(records).find((item) => item.slug === slug);
-    if (found === undefined) {
+    const record = await options.store.get(slug);
+    if (record === null) {
       throw new TerrificError(
         'USAGE',
-        `No browser profile called "${slug}". Run terrific profiles to list them.`,
+        `No profile called "${slug}". Create it with: terrific profiles add ${slug}`,
       );
     }
-    if (found.blockedReason !== null) {
+    if (record.mode === 'persistent' && editing.has(record.name)) {
       throw new TerrificError(
-        'USAGE',
-        `${found.blockedReason}. Create a profile terrific owns instead: terrific profiles add <name> --browser ${found.browserId}`,
+        'CONFLICT',
+        `The profile "${slug}" is open for setup. Close it first: terrific profiles close ${slug}`,
       );
     }
-    return toLaunchOptions(found, options.headless);
+    return launchOptions(record);
   }
 
   async function create(request: CreateProfileRequest): Promise<ProfileView> {
-    const browser = request.browser ?? defaultBrowser();
+    const browser = request.browser ?? firstBrowser()?.id;
+    if (browser === undefined)
+      throw new TerrificError('USAGE', 'No supported browser is installed.');
     browserFor(browser);
     const url = request.url === undefined || request.url === '' ? '' : normalizeUrl(request.url);
     const record = await options.store.create({
@@ -264,5 +267,5 @@ export function createProfileService(options: ProfileServiceOptions): ProfileSer
     await Promise.all([...editing.keys()].map((name) => finish(name, true)));
   }
 
-  return { list, resolve, create, rename, remove, open, close, closeAll };
+  return { list, browsers, resolve, create, rename, remove, open, close, closeAll };
 }

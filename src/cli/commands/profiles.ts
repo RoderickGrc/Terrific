@@ -71,9 +71,7 @@ async function waitForSetup(client: DaemonClient, name: string): Promise<void> {
 }
 
 export function registerProfilesCommand(program: Command, io: CliIo): void {
-  const profiles = program
-    .command('profiles')
-    .description('List browser profiles and manage the ones terrific keeps');
+  const profiles = program.command('profiles').description('List and manage browser profiles');
 
   addJsonOption(
     profiles.command('list', { isDefault: true }).description('List browser profiles'),

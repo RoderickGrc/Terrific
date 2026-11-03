@@ -26,28 +26,28 @@ export const PROFILES: ProfileView[] = [
   {
     slug: 'clean',
     label: 'Clean browser',
-    detail: 'temporary profile',
-    browser: 'Chrome',
+    detail: 'fresh storage, nothing saved',
+    browser: 'Google Chrome',
     blockedReason: null,
     kind: 'clean',
     open: false,
   },
   {
-    slug: 'testing',
-    label: 'Testing',
-    detail: 'Edge · Profile 2',
-    browser: 'Edge',
+    slug: 'qa-admin',
+    label: 'qa-admin',
+    detail: 'Microsoft Edge · saved 2026-03-01 09:00',
+    browser: 'Microsoft Edge',
     blockedReason: null,
-    kind: 'browser',
+    kind: 'snapshot',
     open: false,
   },
   {
-    slug: 'personal',
-    label: 'Personal',
-    detail: 'Chrome · Default',
-    browser: 'Chrome',
-    blockedReason: 'Chrome 136+ blocks automation of its own profiles',
-    kind: 'browser',
+    slug: 'testing',
+    label: 'testing',
+    detail: 'Microsoft Edge · keeps logins and data',
+    browser: 'Microsoft Edge',
+    blockedReason: null,
+    kind: 'persistent',
     open: false,
   },
 ];
@@ -112,6 +112,15 @@ export function createFakeDaemon(): FakeDaemon {
     pinned: [],
   };
   let endpoints = [endpoint('app', 'open', 3), endpoint('worker', 'closed', 0)];
+  let profiles = PROFILES.map((profile) => ({ ...profile }));
+  const setProfile = (name: string, patch: Partial<ProfileView>): ProfileView => {
+    profiles = profiles.map((profile) =>
+      profile.slug === name ? { ...profile, ...patch } : profile,
+    );
+    const found = profiles.find((profile) => profile.slug === (patch.slug ?? name));
+    if (found === undefined) throw new TerrificError('NOT_FOUND', `No profile called "${name}".`);
+    return found;
+  };
   let sessions = [listItem('s-checkout', 'checkout flow', 1, 2), listItem('s-login', null, 3, 0)];
   const views = new Map<string, SessionView>();
   const contexts = new Set<string>();
@@ -194,26 +203,45 @@ export function createFakeDaemon(): FakeDaemon {
 
   const client: DaemonClient = {
     health: async () => ({ appVersion: '0.0.0', pid: 1, port: 4569, startedAt: '' }),
-    listProfiles: async () => PROFILES,
+    listProfiles: async () => profiles,
+    listBrowsers: async () => [
+      { id: 'chrome', name: 'Google Chrome' },
+      { id: 'edge', name: 'Microsoft Edge' },
+    ],
     createProfile: async (body) => {
       record('createProfile', body);
-      return { ...PROFILES[1], slug: body.name, label: body.name, kind: body.mode } as ProfileView;
+      const browser = body.browser === 'chrome' ? 'Google Chrome' : 'Microsoft Edge';
+      const created: ProfileView = {
+        slug: body.name,
+        label: body.name,
+        detail:
+          body.mode === 'persistent'
+            ? `${browser} · keeps logins and data`
+            : `${browser} · nothing saved yet`,
+        browser,
+        blockedReason: null,
+        kind: body.mode,
+        open: false,
+      };
+      profiles = [...profiles, created];
+      return created;
     },
     renameProfile: async (name, next) => {
       record('renameProfile', name, next);
-      return { ...PROFILES[1], slug: next, label: next } as ProfileView;
+      return setProfile(name, { slug: next, label: next });
     },
     removeProfile: async (name) => {
       record('removeProfile', name);
+      profiles = profiles.filter((profile) => profile.slug !== name);
       return { ok: true };
     },
     openProfile: async (name) => {
       record('openProfile', name);
-      return { ...PROFILES[1], slug: name, open: true } as ProfileView;
+      return setProfile(name, { open: true });
     },
     closeProfile: async (name) => {
       record('closeProfile', name);
-      return { ...PROFILES[1], slug: name } as ProfileView;
+      return setProfile(name, { open: false });
     },
     resolveProject: async () => PROJECT,
     listProjects: async () => [PROJECT],

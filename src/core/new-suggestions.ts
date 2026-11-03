@@ -58,7 +58,9 @@ function profileSuggestions(query: string, profiles: ProfileOption[]): Suggestio
     const suggestion: Suggestion = {
       insert: `@${profile.slug}`,
       label: `@${profile.slug}`,
-      detail: `${profile.label} · ${profile.detail}`,
+      // Profiles terrific keeps are labelled by their slug; repeating it adds nothing.
+      detail:
+        profile.label === profile.slug ? profile.detail : `${profile.label} · ${profile.detail}`,
     };
     if (profile.blockedReason !== undefined) suggestion.disabled = true;
     out.push(suggestion);

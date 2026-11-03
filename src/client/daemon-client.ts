@@ -1,4 +1,6 @@
 import {
+  type BrowserView,
+  browsersPath,
   type CaptureResponse,
   type ContextRequest,
   type ContextResponse,
@@ -77,6 +79,7 @@ export type SessionEventsQuery = {
 export type DaemonClient = {
   health(): Promise<HealthView>;
   listProfiles(): Promise<ProfileView[]>;
+  listBrowsers(): Promise<BrowserView[]>;
   createProfile(body: CreateProfileRequest): Promise<ProfileView>;
   renameProfile(name: string, next: string): Promise<ProfileView>;
   removeProfile(name: string): Promise<OkResponse>;
@@ -205,6 +208,7 @@ export function createDaemonClient(options: DaemonClientOptions): DaemonClient {
   return {
     health: () => request('GET', healthPath()),
     listProfiles: () => request('GET', profilesPath()),
+    listBrowsers: () => request('GET', browsersPath()),
     createProfile: (body) => request('POST', profilesPath(), body),
     renameProfile: (name, next) => {
       const body: RenameProfileRequest = { name: next };

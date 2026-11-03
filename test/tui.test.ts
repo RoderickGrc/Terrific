@@ -17,6 +17,11 @@ const DOWN = '\x1b[B';
 const UP = '\x1b[A';
 const CTRL_ENTER = '\x1b[13;5u';
 const CTRL_SHIFT_ENTER = '\x1b[13;6u';
+const CTRL_N = '\x0e';
+const CTRL_R = '\x12';
+const CTRL_D = '\x04';
+const CTRL_U = '\x15';
+const RIGHT = '\x1b[C';
 
 type Harness = {
   term: VirtualTerminal;
@@ -28,8 +33,13 @@ type Harness = {
 // The open TUI, quit after each test so a failed assertion does not leave it running.
 let current: Harness | undefined;
 
-async function open(columns = 110, rows = 34): Promise<Harness> {
+async function open(
+  columns = 110,
+  rows = 34,
+  prepare?: (fake: FakeDaemon) => Promise<void>,
+): Promise<Harness> {
   const fake = createFakeDaemon();
+  await prepare?.(fake);
   const term = new VirtualTerminal(columns, rows);
   const initial = await loadInitial(fake.client, PROJECT.cwd, '/data');
   const tui = mountTui(term, fake.client, initial, { color: false });
@@ -119,14 +129,14 @@ describe('tui', () => {
     match(text, /URL {7}localhost:5173/);
     match(text, /Name {6}pooling check/);
     match(text, /! @te {2}incomplete profile/);
-    match(text, /› @testing {18}Testing · Edge · Profile 2/);
+    match(text, /› @testing {18}Microsoft Edge · keeps logins and data/);
     h.term.send('\t');
     text = await h.term.text();
     match(text, /› \/new localhost:5173 pooling check @testing/);
     h.term.send(ENTER);
     text = await h.term.text();
     match(text, /Confirm new session/);
-    match(text, /Enter starts now: opens localhost:5173 with Testing, linked to ingest app/);
+    match(text, /Enter starts now: opens localhost:5173 with testing, linked to ingest app/);
     h.term.send(ENTER);
     await h.term.lines();
     const [body] = calls(h, 'startSession')[0] as [StartSessionRequest];
@@ -336,6 +346,85 @@ describe('tui', () => {
     match(message, /Session s-new-1 "left running" is still recording in the background/);
     match(message, /terrific stop s-new-1 +stop it and print the summary/);
     match(message, /Ingest endpoints still open: app\./);
+  });
+
+  test('/profiles sets the default, creates, opens, renames and deletes profiles', async () => {
+    const h = await open();
+    h.type('/profiles');
+    h.term.send(ENTER);
+    let text = await h.term.text();
+    match(text, /Browser profiles/);
+    match(text, /▌ clean .* fresh storage, nothing saved .* default/);
+    match(text, /qa-admin +snapshot +Microsoft Edge · saved 2026-03-01 09:00/);
+    h.term.send(' ');
+    text = await h.term.text();
+    match(text, /Clean starts empty every time/);
+
+    h.term.send(DOWN);
+    h.term.send(ENTER);
+    text = await h.term.text();
+    deepEqual(calls(h, 'patchSettings').at(-1), [{ lastSetup: { profile: 'qa-admin' } }]);
+    match(text, /\/new now uses @qa-admin/);
+    match(text, /qa-admin .* default/);
+
+    h.term.send(CTRL_N);
+    h.type('daily');
+    h.term.send(DOWN);
+    h.term.send(RIGHT);
+    text = await h.term.text();
+    match(text, /New profile/);
+    match(text, /Mode +persistent +· +snapshot .* restores what you save/);
+    h.term.send(ENTER);
+    text = await h.term.text();
+    deepEqual(calls(h, 'createProfile'), [
+      [{ name: 'daily', mode: 'snapshot', browser: 'chrome' }],
+    ]);
+    match(text, /▌ daily +snapshot +Google Chrome · nothing saved yet/);
+    match(text, /@daily created\. Space opens it to log in and save/);
+
+    h.term.send(' ');
+    text = await h.term.text();
+    deepEqual(calls(h, 'openProfile'), [['daily']]);
+    match(text, /daily .* ● open/);
+    match(text, /Space save/);
+    h.term.send(CTRL_R);
+    text = await h.term.text();
+    match(text, /Close @daily first with Space/);
+    h.term.send(' ');
+    text = await h.term.text();
+    deepEqual(calls(h, 'closeProfile'), [['daily']]);
+    match(text, /@daily saved/);
+
+    h.term.send(CTRL_R);
+    h.term.send(CTRL_U);
+    h.type('nightly');
+    h.term.send(ENTER);
+    text = await h.term.text();
+    deepEqual(calls(h, 'renameProfile'), [['daily', 'nightly']]);
+    match(text, /▌ nightly/);
+
+    h.term.send(CTRL_D);
+    text = await h.term.text();
+    match(text, /Press Ctrl\+D again to delete @nightly/);
+    equal(calls(h, 'removeProfile').length, 0);
+    h.term.send(CTRL_D);
+    text = await h.term.text();
+    deepEqual(calls(h, 'removeProfile'), [['nightly']]);
+    match(text, /@nightly deleted/);
+    h.term.send(ESC);
+    text = await h.term.text();
+    match(text, /\/new starts from: browser · @qa-admin/);
+    await quit(h);
+  });
+
+  test('a default profile that is gone falls back to clean', async () => {
+    const h = await open(110, 34, async (fake) => {
+      await fake.client.patchSettings(PROJECT.id, { lastSetup: { profile: 'treecloud-rod' } });
+    });
+    const text = await h.term.text();
+    match(text, /@treecloud-rod is not available anymore\. \/new now uses @clean/);
+    match(text, /\/new starts from: browser · Clean browser \(@clean\)/);
+    await quit(h);
   });
 
   test('a resize reflows the screen', async () => {

@@ -42,6 +42,10 @@ function readNewName(body: unknown): string {
 }
 
 export function registerProfileRoutes(router: Router, deps: ProfileRouteDeps): void {
+  router.route('GET', '/v1/browsers', (ctx) => {
+    ctx.send(200, deps.profiles.browsers());
+  });
+
   router.route('GET', '/v1/profiles', async (ctx) => {
     ctx.send(200, await deps.profiles.list());
   });

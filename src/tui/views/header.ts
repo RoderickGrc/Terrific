@@ -14,6 +14,12 @@ export function profileLabel(state: TuiState, slug: string): string {
   return state.profiles.find((profile) => profile.slug === slug)?.label ?? slug;
 }
 
+/** `Clean browser (@clean)`, or just `@qa-admin` for profiles named by their slug. */
+export function profileName(state: TuiState, slug: string): string {
+  const label = profileLabel(state, slug);
+  return label === slug ? `@${slug}` : `${label} (@${slug})`;
+}
+
 export function elapsed(state: TuiState, startedAt: string): number {
   const start = parseTime(startedAt);
   return start === null ? 0 : state.now - start;

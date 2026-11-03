@@ -165,8 +165,13 @@ export type ContextRequest = {
   only?: ContextOnly[];
 };
 
-/** `clean` is the throwaway profile, `browser` a profile of an installed browser, the modes are profiles terrific owns. */
-export type ProfileKind = 'clean' | 'browser' | ProfileMode;
+/** `clean` is the throwaway profile; the modes are profiles terrific keeps. */
+export type ProfileKind = 'clean' | ProfileMode;
+
+export type BrowserView = {
+  id: BrowserId;
+  name: string;
+};
 
 export type ProfileView = {
   slug: string;
@@ -222,6 +227,10 @@ export function healthPath(): string {
 
 export function profilesPath(): string {
   return '/v1/profiles';
+}
+
+export function browsersPath(): string {
+  return '/v1/browsers';
 }
 
 export function profilePath(name: string): string {

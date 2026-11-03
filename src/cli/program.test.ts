@@ -329,7 +329,7 @@ test('doctor --json has the check shape and a writable temp data root', async ()
   };
   ok(Array.isArray(body.checks));
   const names = (body.checks ?? []).map((item) => item.name);
-  deepEqual(names, ['node', 'browser', 'data-root', 'daemon', 'port', 'legacy', 'profiles']);
+  deepEqual(names, ['node', 'browser', 'data-root', 'daemon', 'port', 'legacy']);
   const dataRoot = (body.checks ?? []).find((item) => item.name === 'data-root');
   ok(dataRoot?.ok === true);
   if (code !== 0 && code !== 1) {

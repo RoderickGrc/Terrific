@@ -308,7 +308,10 @@ test('no-browser session: flag, screenshot 400, stop', async () => {
     setup: { ...browserSetup('http://127.0.0.1/', 'main'), profile: 'work' },
   });
   equal(blocked.status, 400);
-  match(errorMessage(blocked.value), /No browser profile called "work"/);
+  match(
+    errorMessage(blocked.value),
+    /No profile called "work". Create it with: terrific profiles add work/,
+  );
 
   const stopped = await call(handle, 'POST', sessionStopPath(session.id), {});
   equal(stopped.status, 200);

@@ -13,6 +13,7 @@ import type { TerrificEvent } from '../core/events.ts';
 import { approxTokens, formatBytes, formatTokens } from '../core/format.ts';
 import { parseNewLine } from '../core/new-command.ts';
 import { applySuggestion, type SuggestContext, suggestNew } from '../core/new-suggestions.ts';
+import { isProfileName } from '../core/profiles.ts';
 import { isStoredEvent } from '../core/session.ts';
 import {
   copySetup,
@@ -44,6 +45,9 @@ import {
   newFields,
   type PickerItem,
   type PickerOverlay,
+  PROFILE_FIELDS,
+  type ProfileDraft,
+  type ProfilesOverlay,
   RECORD_KEYS,
   type SessionsOverlay,
   type SettingsOverlay,
@@ -51,7 +55,7 @@ import {
 } from './state.ts';
 import type { Theme, Tone } from './theme.ts';
 import { hints, inputText, placeholderText, type View } from './views/common.ts';
-import { headerLines, profileLabel } from './views/header.ts';
+import { headerLines, profileName } from './views/header.ts';
 import { homeLines } from './views/home.ts';
 import { ingestLines, linkedEndpoint } from './views/ingest.ts';
 import { liveLines, liveStats } from './views/live.ts';
@@ -70,6 +74,7 @@ import {
   settingsItems,
   stopLines,
 } from './views/panels.ts';
+import { profilesLines } from './views/profiles.ts';
 import { sessionRows, sessionsLines } from './views/sessions.ts';
 import { sameSetup, summaryLines } from './views/summary.ts';
 
@@ -166,23 +171,29 @@ export class TuiApp implements Component, Focusable {
       toast: null,
       now: Date.now(),
       ctrlCAt: 0,
+      browsers: [],
     };
   }
 
   start(running: SessionView | null): void {
     if (running !== null) this.attach(running, false);
+    this.run(() => this.ensureDefaultProfile());
     this.ticker = setInterval(() => {
       this.state.now = Date.now();
       this.deps.requestRender();
     }, 1000);
     this.refresher = setInterval(() => {
-      if (this.state.screen !== 'home' && this.state.overlay?.type !== 'ingest') return;
+      const panel = this.state.overlay?.type;
+      if (this.state.screen !== 'home' && panel !== 'ingest' && panel !== 'profiles') return;
       const { client } = this.deps;
       // Profiles too, so ones added with `terrific profiles add` show up without a restart.
       Promise.all([client.listEndpoints(this.state.project.id), client.listProfiles()])
         .then(([endpoints, profiles]) => {
           this.state.endpoints = endpoints;
           this.state.profiles = profiles;
+          return this.ensureDefaultProfile();
+        })
+        .then(() => {
           this.deps.requestRender();
         })
         .catch(() => undefined);
@@ -247,6 +258,7 @@ export class TuiApp implements Component, Focusable {
     if (overlay?.type === 'new') return confirmLines(view, overlay);
     if (overlay?.type === 'sessions') return sessionsLines(view, overlay);
     if (overlay?.type === 'ingest') return ingestLines(view, overlay);
+    if (overlay?.type === 'profiles') return profilesLines(view, overlay);
     if (overlay?.type === 'help') return helpLines(view);
     return [];
   }
@@ -317,7 +329,7 @@ export class TuiApp implements Component, Focusable {
     const records = RECORD_KEYS.filter((key) => last.record[key]).join(', ') || 'nothing';
     const from =
       last.target === 'browser'
-        ? `browser · ${profileLabel(state, last.profile)} (@${last.profile}) · records ${records}`
+        ? `browser · ${profileName(state, last.profile)} · records ${records}`
         : 'no browser';
     const ingest = endpoint === null ? '' : ` · ingest ${endpoint}`;
     return theme.paint(`/new starts from: ${from}${ingest}`, 'fg2');
@@ -370,6 +382,7 @@ export class TuiApp implements Component, Focusable {
         ['Esc', 'close'],
       ]);
     }
+    if (overlay?.type === 'profiles') return this.profilesHints(overlay);
     if (overlay?.type === 'stop') {
       return hints(theme, [
         ['type', 'rename'],
@@ -856,8 +869,8 @@ export class TuiApp implements Component, Focusable {
           live.unseen = 0;
         }
         break;
-      case 'profile':
-        this.pickProfile();
+      case 'profiles':
+        this.openProfiles();
         break;
       case 'record':
         this.pickRecord();
@@ -1104,6 +1117,9 @@ export class TuiApp implements Component, Focusable {
         break;
       case 'ingest':
         this.ingestKey(overlay, data);
+        break;
+      case 'profiles':
+        this.profilesKey(overlay, data);
         break;
       case 'stop':
         this.stopKey(data);
@@ -1521,6 +1537,274 @@ export class TuiApp implements Component, Focusable {
     });
   }
 
+  // ---------- /profiles ----------
+
+  private openProfiles(): void {
+    const state = this.state;
+    const current = state.profiles.findIndex(
+      (profile) => profile.slug === state.settings.lastSetup.profile,
+    );
+    state.overlay = {
+      type: 'profiles',
+      index: Math.max(0, current),
+      renaming: null,
+      confirmDelete: null,
+      creating: null,
+    };
+    state.input.clear();
+    this.run(() => this.reloadProfiles());
+  }
+
+  private async reloadProfiles(): Promise<void> {
+    const { client } = this.deps;
+    const [profiles, browsers] = await Promise.all([client.listProfiles(), client.listBrowsers()]);
+    this.state.profiles = profiles;
+    this.state.browsers = browsers;
+    await this.ensureDefaultProfile();
+  }
+
+  /** A default profile that no longer exists (a browser's own, or a deleted one) falls back to clean. */
+  private async ensureDefaultProfile(): Promise<void> {
+    const state = this.state;
+    const slug = state.settings.lastSetup.profile;
+    if (state.profiles.length === 0 || state.profiles.some((profile) => profile.slug === slug)) {
+      return;
+    }
+    await this.patchSettings({ lastSetup: { profile: 'clean' } });
+    this.toast('warn', `@${slug} is not available anymore. /new now uses @clean`);
+  }
+
+  private profilesHints(overlay: ProfilesOverlay): string {
+    const { theme } = this.deps;
+    if (overlay.creating !== null) {
+      return hints(theme, [
+        ['↑↓', 'field'],
+        ['←→', 'change'],
+        ['Enter', 'create'],
+        ['Esc', 'cancel'],
+      ]);
+    }
+    if (overlay.renaming !== null) {
+      return hints(theme, [
+        ['Enter', 'save name'],
+        ['Esc', 'cancel'],
+      ]);
+    }
+    const profile = this.state.profiles[overlay.index];
+    const kept = profile !== undefined && profile.kind !== 'clean';
+    // No ↑↓ hint: with every action listed the line must still fit 80 columns.
+    const pairs: [string, string][] = [['Enter', 'default']];
+    if (kept) {
+      const close = profile.kind === 'snapshot' ? 'save' : 'close';
+      pairs.push(['Space', profile.open ? close : 'open']);
+    }
+    pairs.push(['Ctrl+N', 'new']);
+    if (kept) pairs.push(['Ctrl+R', 'rename'], ['Ctrl+D', 'delete']);
+    pairs.push(['Esc', 'close']);
+    return hints(theme, pairs);
+  }
+
+  private profilesKey(overlay: ProfilesOverlay, data: string): void {
+    const state = this.state;
+    if (overlay.creating !== null) {
+      this.draftKey(overlay, overlay.creating, data);
+      return;
+    }
+    if (overlay.renaming !== null) {
+      this.renameProfileKey(overlay, overlay.renaming, data);
+      return;
+    }
+    if (matchesKey(data, Key.escape)) {
+      this.closeOverlay();
+      return;
+    }
+    if (matchesKey(data, Key.down) || matchesKey(data, Key.up)) {
+      const delta = matchesKey(data, Key.down) ? 1 : -1;
+      overlay.index = Math.max(0, Math.min(state.profiles.length - 1, overlay.index + delta));
+      overlay.confirmDelete = null;
+      return;
+    }
+    if (matchesKey(data, Key.ctrl('n'))) {
+      overlay.creating = {
+        field: 0,
+        name: '',
+        mode: 'persistent',
+        browser: state.browsers[0]?.id ?? null,
+        url: '',
+      };
+      overlay.confirmDelete = null;
+      state.input.clear();
+      return;
+    }
+    const profile = state.profiles[overlay.index];
+    if (profile === undefined) return;
+    if (matchesKey(data, Key.enter)) {
+      this.run(async () => {
+        await this.patchSettings({ lastSetup: { profile: profile.slug } });
+        this.toast('ok', `/new now uses @${profile.slug}`);
+      });
+      return;
+    }
+    const space = matchesKey(data, Key.space);
+    const rename = matchesKey(data, Key.ctrl('r'));
+    const remove = matchesKey(data, Key.ctrl('d'));
+    if (!space && !rename && !remove) return;
+    if (profile.kind === 'clean') {
+      this.toast('warn', 'Clean starts empty every time. Ctrl+N creates a profile you can set up');
+      return;
+    }
+    if (space) {
+      this.toggleProfileOpen(profile.slug, profile.kind === 'snapshot', profile.open);
+    } else if (profile.open) {
+      this.toast('warn', `Close @${profile.slug} first with Space`);
+    } else if (rename) {
+      overlay.renaming = profile.slug;
+      state.input.set(profile.slug);
+    } else if (overlay.confirmDelete !== profile.slug) {
+      overlay.confirmDelete = profile.slug;
+      this.toast('err', `Press Ctrl+D again to delete @${profile.slug} with its logins and data`);
+    } else {
+      overlay.confirmDelete = null;
+      this.run(async () => {
+        await this.deps.client.removeProfile(profile.slug);
+        overlay.index = Math.max(0, overlay.index - 1);
+        await this.reloadProfiles();
+        this.toast('ok', `@${profile.slug} deleted`);
+      });
+    }
+  }
+
+  private toggleProfileOpen(slug: string, snapshot: boolean, open: boolean): void {
+    const { client } = this.deps;
+    this.run(async () => {
+      if (open) {
+        await client.closeProfile(slug);
+        this.toast('ok', snapshot ? `@${slug} saved` : `@${slug} closed`);
+      } else {
+        await client.openProfile(slug);
+        this.toast(
+          'info',
+          snapshot
+            ? `Log in to @${slug} in the browser, then Space here saves it`
+            : `@${slug} is open. What you do in it is kept`,
+        );
+      }
+      await this.reloadProfiles();
+    });
+  }
+
+  private renameProfileKey(overlay: ProfilesOverlay, name: string, data: string): void {
+    const state = this.state;
+    if (matchesKey(data, Key.escape)) {
+      overlay.renaming = null;
+      state.input.clear();
+      return;
+    }
+    if (!matchesKey(data, Key.enter)) {
+      state.input.handle(data);
+      return;
+    }
+    const next = state.input.value.trim().toLowerCase();
+    if (next === name) {
+      overlay.renaming = null;
+      state.input.clear();
+      return;
+    }
+    if (!isProfileName(next)) {
+      this.toast('warn', 'Use lowercase letters, digits and dashes');
+      return;
+    }
+    const wasDefault = state.settings.lastSetup.profile === name;
+    this.run(async () => {
+      await this.deps.client.renameProfile(name, next);
+      if (wasDefault) await this.patchSettings({ lastSetup: { profile: next } });
+      overlay.renaming = null;
+      state.input.clear();
+      await this.reloadProfiles();
+      this.toast('ok', `@${name} renamed to @${next}`);
+    });
+  }
+
+  private syncDraftInput(draft: ProfileDraft): void {
+    const field = PROFILE_FIELDS[draft.field];
+    if (field === 'name') this.state.input.set(draft.name);
+    else if (field === 'url') this.state.input.set(draft.url);
+    else this.state.input.clear();
+  }
+
+  private draftKey(overlay: ProfilesOverlay, draft: ProfileDraft, data: string): void {
+    const state = this.state;
+    const field = PROFILE_FIELDS[draft.field] ?? 'name';
+    if (matchesKey(data, Key.escape)) {
+      overlay.creating = null;
+      state.input.clear();
+      return;
+    }
+    const down = matchesKey(data, Key.down) || matchesKey(data, Key.tab);
+    if (down || matchesKey(data, Key.up) || matchesKey(data, Key.shift('tab'))) {
+      draft.field = step(draft.field, down ? 1 : -1, PROFILE_FIELDS.length);
+      this.syncDraftInput(draft);
+      return;
+    }
+    if (matchesKey(data, Key.enter)) {
+      this.createProfile(overlay, draft);
+      return;
+    }
+    if (field === 'name' || field === 'url') {
+      if (!state.input.handle(data)) return;
+      if (field === 'name') draft.name = state.input.value;
+      else draft.url = state.input.value;
+      return;
+    }
+    const delta = matchesKey(data, Key.right) ? 1 : matchesKey(data, Key.left) ? -1 : 0;
+    if (delta === 0 && !matchesKey(data, Key.space)) return;
+    if (field === 'mode') {
+      draft.mode = draft.mode === 'persistent' ? 'snapshot' : 'persistent';
+      return;
+    }
+    const ids = state.browsers.map((browser) => browser.id);
+    const at = Math.max(0, draft.browser === null ? 0 : ids.indexOf(draft.browser));
+    draft.browser = ids[step(at, delta === 0 ? 1 : delta, ids.length)] ?? null;
+  }
+
+  private createProfile(overlay: ProfilesOverlay, draft: ProfileDraft): void {
+    const state = this.state;
+    const name = draft.name.trim().toLowerCase();
+    if (!isProfileName(name)) {
+      draft.field = 0;
+      this.syncDraftInput(draft);
+      this.toast('warn', 'Name the profile with lowercase letters, digits and dashes');
+      return;
+    }
+    const browser = draft.browser;
+    if (browser === null) {
+      this.toast('err', 'No supported browser is installed');
+      return;
+    }
+    const url = draft.url.trim();
+    this.run(async () => {
+      const created = await this.deps.client.createProfile({
+        name,
+        mode: draft.mode,
+        browser,
+        ...(url === '' ? {} : { url }),
+      });
+      overlay.creating = null;
+      state.input.clear();
+      await this.reloadProfiles();
+      overlay.index = Math.max(
+        0,
+        state.profiles.findIndex((profile) => profile.slug === created.slug),
+      );
+      this.toast(
+        'ok',
+        created.kind === 'snapshot'
+          ? `@${name} created. Space opens it to log in and save`
+          : `@${name} created. Space opens it to log in`,
+      );
+    });
+  }
+
   private pickRecord(): void {
     const record = this.state.settings.lastSetup.record;
     this.openPicker({
@@ -1606,7 +1890,7 @@ export class TuiApp implements Component, Focusable {
     const item = items[overlay.index];
     if (item === undefined || item.heading === true) return;
     if (item.id === 'profile') {
-      this.pickProfile();
+      this.openProfiles();
       return;
     }
     const [group, key] = item.id.split(':');

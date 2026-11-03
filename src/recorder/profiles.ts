@@ -65,6 +65,7 @@ export function toLaunchOptions(profile: BrowserProfile, headless: boolean): Lau
   return options;
 }
 
+// Temporary dead path since 2026-11-03: Chrome, Edge and Comet all refuse automation of their own profiles, so the daemon only offers clean and the profiles terrific keeps. Kept, with its tests, until we decide to delete it.
 export function discoverProfiles(input: DiscoverProfilesInput): BrowserProfile[] {
   const drafts: Omit<BrowserProfile, 'slug'>[] = [];
   const clean = cleanProfile(input.browsers);

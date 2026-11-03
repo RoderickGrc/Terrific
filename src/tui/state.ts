@@ -1,4 +1,5 @@
 import type {
+  BrowserView,
   EndpointView,
   ProfileView,
   ProjectSettingsView,
@@ -8,6 +9,7 @@ import type {
   SessionView,
 } from '../core/api.ts';
 import type { TerrificEvent } from '../core/events.ts';
+import type { BrowserId, ProfileMode } from '../core/profiles.ts';
 import type { RecordOptions, SessionSetup } from '../core/setup.ts';
 import type { Screen } from './commands.ts';
 import type { InputLine } from './input-line.ts';
@@ -68,6 +70,27 @@ export type IngestOverlay = {
   eventsFor: string | null;
 };
 
+export const PROFILE_FIELDS = ['name', 'mode', 'browser', 'url'] as const;
+export type ProfileField = (typeof PROFILE_FIELDS)[number];
+
+/** The new-profile form opened with Ctrl+N in /profiles. */
+export type ProfileDraft = {
+  field: number;
+  name: string;
+  mode: ProfileMode;
+  browser: BrowserId | null;
+  url: string;
+};
+
+export type ProfilesOverlay = {
+  type: 'profiles';
+  index: number;
+  /** The profile whose name is being edited. */
+  renaming: string | null;
+  confirmDelete: string | null;
+  creating: ProfileDraft | null;
+};
+
 export type PickerItem = {
   id: string;
   label: string;
@@ -99,6 +122,7 @@ export type Overlay =
   | NewOverlay
   | SessionsOverlay
   | IngestOverlay
+  | ProfilesOverlay
   | PickerOverlay
   | SettingsOverlay
   | { type: 'stop' }
@@ -110,6 +134,8 @@ export type TuiState = {
   screen: Screen;
   settings: ProjectSettingsView;
   profiles: ProfileView[];
+  /** Installed browsers a new profile can use; loaded when /profiles opens. */
+  browsers: BrowserView[];
   endpoints: EndpointView[];
   sessions: SessionListItem[];
   legacy: SessionListItem[] | null;
@@ -127,7 +153,13 @@ export type TuiState = {
 
 export function isModal(overlay: Overlay | null): boolean {
   const type = overlay?.type;
-  return type === 'new' || type === 'sessions' || type === 'ingest' || type === 'help';
+  return (
+    type === 'new' ||
+    type === 'sessions' ||
+    type === 'ingest' ||
+    type === 'profiles' ||
+    type === 'help'
+  );
 }
 
 export function newFields(setup: SessionSetup): NewField[] {

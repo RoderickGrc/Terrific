@@ -5,7 +5,7 @@ export type CommandName =
   | 'sessions'
   | 'ingest'
   | 'attach'
-  | 'profile'
+  | 'profiles'
   | 'record'
   | 'note'
   | 'bug'
@@ -55,7 +55,12 @@ export const COMMANDS: CommandSpec[] = [
     screens: IDLE,
     needsBackground: true,
   },
-  { name: 'profile', description: 'Default browser profile', screens: IDLE },
+  {
+    name: 'profiles',
+    aliases: ['profile'],
+    description: 'Browser profiles: the default, new ones, logins',
+    screens: IDLE,
+  },
   { name: 'record', description: 'What browser sessions record by default', screens: IDLE },
   {
     name: 'note',

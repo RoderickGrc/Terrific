@@ -1,4 +1,4 @@
-import { existsSync, readFileSync } from 'node:fs';
+import { existsSync } from 'node:fs';
 import { mkdir, readdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { createServer } from 'node:net';
 import { join } from 'node:path';
@@ -19,21 +19,12 @@ export type DoctorCheck = {
 const ENGINE_RANGE = pkg.engines.node;
 
 export async function runDoctorChecks(io: CliIo, dataRoot: string): Promise<DoctorCheck[]> {
-  const [{ findInstalledBrowsers }, { discoverProfiles }] = await Promise.all([
-    import('../recorder/browsers.ts'),
-    import('../recorder/profiles.ts'),
-  ]);
+  const { findInstalledBrowsers } = await import('../recorder/browsers.ts');
   const browsers = findInstalledBrowsers({
     platform: io.platform,
     env: io.env,
     exists: existsSync,
   });
-  const profiles = discoverProfiles({
-    browsers,
-    readFile: readLocalState,
-  });
-  const usable = profiles.filter((profile) => profile.blockedReason === null).length;
-  const blocked = profiles.filter((profile) => profile.blockedReason !== null).length;
   const daemonOk = await probeDaemon(dataRoot, io.env);
   const port = parseDaemonPort(io.env.TERRIFIC_PORT);
 
@@ -44,16 +35,7 @@ export async function runDoctorChecks(io: CliIo, dataRoot: string): Promise<Doct
     daemonCheck(daemonOk),
     await portCheck(port, daemonOk),
     await legacyCheck(dataRoot),
-    profilesCheck(usable, blocked),
   ];
-}
-
-function readLocalState(path: string): string | null {
-  try {
-    return readFileSync(path, 'utf8');
-  } catch {
-    return null;
-  }
 }
 
 function check(name: string, ok: boolean, detail: string, fix = ''): DoctorCheck {
@@ -214,9 +196,4 @@ async function legacyCheck(dataRoot: string): Promise<DoctorCheck> {
     true,
     `${globalSessions} global sessions, ${workspaceStores} workspace stores`,
   );
-}
-
-function profilesCheck(usable: number, blocked: number): DoctorCheck {
-  const ok = usable > 0;
-  return check('profiles', ok, `${usable} usable, ${blocked} blocked`, 'Install Chrome or Edge.');
 }

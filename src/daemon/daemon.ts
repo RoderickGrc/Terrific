@@ -11,7 +11,7 @@ import { createProjectStore } from '../store/projects.ts';
 import { createRouter, mapError, type Router, sendJson } from './http.ts';
 import { createIngestService, type IngestHooks, type IngestService } from './ingest-service.ts';
 import { createProfileService, type ProfileService } from './profile-service.ts';
-import { discoverMachineProfiles, installedBrowsers } from './resolve-browser.ts';
+import { installedBrowsers } from './resolve-browser.ts';
 import { registerCoreRoutes } from './routes-core.ts';
 import { registerIngestRoutes } from './routes-ingest.ts';
 import { registerProfileRoutes } from './routes-profiles.ts';
@@ -168,7 +168,6 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
   const profiles = createProfileService({
     store: createProfileStore({ dir: paths.profilesDir, now: options.now }),
     headless: options.headless ?? false,
-    machineProfiles: discoverMachineProfiles,
     installedBrowsers,
     launch: options.launch ?? launchBrowser,
   });
