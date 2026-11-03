@@ -56,7 +56,7 @@ export function createSessionService(options: {
   hub: StreamHub;
   now: () => Date;
   random: RandomSource;
-  resolveBrowser: (profile: string) => LaunchOptions;
+  resolveBrowser: (profile: string) => Promise<LaunchOptions>;
 }): SessionService {
   const stores = new Map<string, SessionStore>();
   const lives = new Map<string, LiveSession>();
@@ -152,7 +152,8 @@ export function createSessionService(options: {
       const opened = await options.ingest.up(projectId, setup.endpoint);
       endpointRef = { name: opened.name, token: tokenFromUrl(opened.url) };
     }
-    const launch = setup.target === 'browser' ? options.resolveBrowser(setup.profile) : undefined;
+    const launch =
+      setup.target === 'browser' ? await options.resolveBrowser(setup.profile) : undefined;
     const created = await store.create({
       name: request.name ?? defaultSessionName(setup, options.now()),
       setup,
@@ -190,7 +191,8 @@ export function createSessionService(options: {
       }
     } catch (error) {
       if (lives.has(created.record.id)) await stop(created.record.id);
-      if (launch !== undefined && setup.profile !== 'clean') {
+      // A browser's own profile fails when the browser refuses automation; say so instead of a launch error.
+      if (launch?.profileDirectory !== undefined) {
         const browser = launch.browserName ?? 'The browser';
         const label = launch.profileLabel ?? setup.profile;
         throw new TerrificError('INTERNAL', profileAutomationFailed(browser, label));

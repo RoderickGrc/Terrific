@@ -5,6 +5,14 @@ import type { BrowserId, InstalledBrowser } from './browsers.ts';
 import type { LaunchOptions } from './launch.ts';
 
 export const CHROME_PROFILE_BLOCKED = 'Chrome 136+ blocks automation of its own profiles';
+// Reported by a tester on 2026-11-03: Comet refuses automation of its own profiles like Chrome does.
+export const COMET_PROFILE_BLOCKED = 'Comet blocks automation of its own profiles';
+
+function blockedReason(id: BrowserId): string | null {
+  if (id === 'chrome') return CHROME_PROFILE_BLOCKED;
+  if (id === 'comet') return COMET_PROFILE_BLOCKED;
+  return null;
+}
 
 const CLEAN_ORDER: readonly BrowserId[] = ['chrome', 'edge', 'chromium', 'comet'];
 
@@ -113,7 +121,7 @@ function realProfiles(
   const entries = readInfoCache(contents);
   if (entries === null) return [];
   entries.sort((left, right) => compareProfileDirs(left.directory, right.directory));
-  const blocked = browser.id === 'chrome' ? CHROME_PROFILE_BLOCKED : null;
+  const blocked = blockedReason(browser.id);
   return entries.map((entry) => ({
     id: `${browser.id}:${entry.directory}`,
     label: entry.name,

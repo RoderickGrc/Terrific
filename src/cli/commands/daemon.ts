@@ -99,18 +99,14 @@ export function registerDaemonCommand(program: Command, io: CliIo): void {
         release = resolve;
       });
       // Dynamic so `daemon start` never loads Playwright or the HTTP server.
-      const [{ startDaemon }, { resolveBrowserProfile }] = await Promise.all([
-        import('../../daemon/daemon.ts'),
-        import('../../daemon/resolve-browser.ts'),
-      ]);
-      const headless = io.env.TERRIFIC_HEADLESS === '1';
+      const { startDaemon } = await import('../../daemon/daemon.ts');
       const handle = await startDaemon({
         dataRoot: dataRootFrom(io),
         port: parseDaemonPort(io.env.TERRIFIC_PORT),
         appVersion: pkg.version,
         now: () => new Date(),
         random: (n) => getRandomValues(new Uint8Array(n)),
-        resolveBrowser: (profile) => resolveBrowserProfile(profile, headless),
+        headless: io.env.TERRIFIC_HEADLESS === '1',
         onShutdown: () => {
           release();
         },

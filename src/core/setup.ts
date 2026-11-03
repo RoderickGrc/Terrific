@@ -131,9 +131,14 @@ export function displayUrl(url: string): string {
 
 /** The name a session gets when the tester gives none: the local start time, then the page or endpoint. */
 export function defaultSessionName(setup: SessionSetup, at: Date): string {
+  return `${localMinute(at)} ${sessionPlace(setup)}`;
+}
+
+/** Local date and time to the minute, as `2026-11-03 08:22`. */
+export function localMinute(at: Date): string {
   const pad = (n: number): string => String(n).padStart(2, '0');
   const day = `${at.getFullYear()}-${pad(at.getMonth() + 1)}-${pad(at.getDate())}`;
-  return `${day} ${pad(at.getHours())}:${pad(at.getMinutes())} ${sessionPlace(setup)}`;
+  return `${day} ${pad(at.getHours())}:${pad(at.getMinutes())}`;
 }
 
 function sessionPlace(setup: SessionSetup): string {

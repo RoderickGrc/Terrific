@@ -48,6 +48,7 @@ test('dataPaths lists every fixed file under the root', () => {
     configFile: join(root, 'config.json'),
     projectsIndex: join(root, 'projects.json'),
     projectsDir: join(root, 'projects'),
+    profilesDir: join(root, 'profiles'),
     legacySessionsDir: join(root, 'sessions'),
     legacyWorkspacesFile: join(root, 'workspaces.json'),
   });

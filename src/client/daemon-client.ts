@@ -3,7 +3,9 @@ import {
   type ContextRequest,
   type ContextResponse,
   type CreateEndpointRequest,
+  type CreateProfileRequest,
   closeEndpointPath,
+  closeProfilePath,
   daemonShutdownPath,
   type EndpointView,
   endpointEventsPath,
@@ -16,17 +18,22 @@ import {
   type MarkRequest,
   type MarkResponse,
   type OkResponse,
+  type OpenProfileRequest,
+  openProfilePath,
   type ProfileView,
   type ProjectSettingsView,
   type ProjectView,
   type PromptResponse,
+  profilePath,
   profilesPath,
   projectSettingsPath,
   projectsPath,
   type RenameEndpointRequest,
+  type RenameProfileRequest,
   type RenameSessionRequest,
   type ResolveProjectRequest,
   renameEndpointPath,
+  renameProfilePath,
   resolveProjectPath,
   type SessionDetail,
   type SessionListItem,
@@ -70,6 +77,11 @@ export type SessionEventsQuery = {
 export type DaemonClient = {
   health(): Promise<HealthView>;
   listProfiles(): Promise<ProfileView[]>;
+  createProfile(body: CreateProfileRequest): Promise<ProfileView>;
+  renameProfile(name: string, next: string): Promise<ProfileView>;
+  removeProfile(name: string): Promise<OkResponse>;
+  openProfile(name: string, url?: string): Promise<ProfileView>;
+  closeProfile(name: string): Promise<ProfileView>;
   resolveProject(body: ResolveProjectRequest): Promise<ProjectView>;
   listProjects(): Promise<ProjectView[]>;
   listEndpoints(projectId: string): Promise<EndpointView[]>;
@@ -193,6 +205,17 @@ export function createDaemonClient(options: DaemonClientOptions): DaemonClient {
   return {
     health: () => request('GET', healthPath()),
     listProfiles: () => request('GET', profilesPath()),
+    createProfile: (body) => request('POST', profilesPath(), body),
+    renameProfile: (name, next) => {
+      const body: RenameProfileRequest = { name: next };
+      return request('POST', renameProfilePath(encodeName(name)), body);
+    },
+    removeProfile: (name) => request('DELETE', profilePath(encodeName(name))),
+    openProfile: (name, url) => {
+      const body: OpenProfileRequest = url === undefined ? {} : { url };
+      return request('POST', openProfilePath(encodeName(name)), body);
+    },
+    closeProfile: (name) => request('POST', closeProfilePath(encodeName(name))),
     resolveProject: (body) => request('POST', resolveProjectPath(), body),
     listProjects: () => request('GET', projectsPath()),
     listEndpoints: (projectId) => request('GET', endpointsPath(projectId)),

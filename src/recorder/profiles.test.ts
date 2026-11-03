@@ -4,6 +4,7 @@ import { test } from 'node:test';
 import type { InstalledBrowser } from './browsers.ts';
 import {
   CHROME_PROFILE_BLOCKED,
+  COMET_PROFILE_BLOCKED,
   discoverProfiles,
   profileAutomationFailed,
   toLaunchOptions,
@@ -146,5 +147,25 @@ test('profileAutomationFailed names the browser and the @clean fallback', () => 
   equal(
     profileAutomationFailed('Microsoft Edge', 'Work'),
     'Microsoft Edge did not accept automation for profile "Work". Close Microsoft Edge if it is open, or use @clean.',
+  );
+});
+
+test('discoverProfiles blocks Comet profiles like Chrome ones', () => {
+  const comet: InstalledBrowser = {
+    id: 'comet',
+    name: 'Comet',
+    executablePath: '/comet',
+    userDataRoot: join('comet-root'),
+  };
+  const found = discoverProfiles({
+    browsers: [comet],
+    readFile: () => JSON.stringify({ profile: { info_cache: { Default: { name: 'Work' } } } }),
+  });
+  deepEqual(
+    found.map((profile) => [profile.slug, profile.blockedReason]),
+    [
+      ['clean', null],
+      ['work', COMET_PROFILE_BLOCKED],
+    ],
   );
 });

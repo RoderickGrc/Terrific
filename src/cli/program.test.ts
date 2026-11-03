@@ -8,7 +8,6 @@ import { join } from 'node:path';
 import { after, test } from 'node:test';
 import type { SessionView } from '../core/api.ts';
 import { type DaemonHandle, startDaemon } from '../daemon/daemon.ts';
-import { resolveBrowserProfile } from '../daemon/resolve-browser.ts';
 import { findInstalledBrowsers } from '../recorder/browsers.ts';
 import type { CliIo } from './io.ts';
 import { runCli } from './program.ts';
@@ -71,7 +70,7 @@ async function setup() {
     appVersion: '0.0.0-test',
     now: () => new Date(),
     random: (n) => getRandomValues(new Uint8Array(n)),
-    resolveBrowser: (profile) => resolveBrowserProfile(profile, true),
+    headless: true,
   });
   handles.push(handle);
   const env = {
@@ -280,6 +279,45 @@ test('profiles --json includes clean when a browser is installed', async (t) => 
   ok(Array.isArray(listed) && listed.length > 0);
   equalText(listed[0]?.slug, 'clean');
   equalText(listed[0]?.label, 'Clean browser');
+});
+
+test('profiles add, list, rename and rm manage the profiles terrific keeps', async (t) => {
+  const installed = findInstalledBrowsers({
+    platform: process.platform,
+    env: process.env,
+    exists: existsSync,
+  });
+  if (installed[0] === undefined) {
+    t.skip('no Chromium-based browser installed');
+    return;
+  }
+  const { cwd, env } = await setup();
+  const added = captureIo(cwd, env);
+  equalExit(await runCli(argv('profiles', 'add', 'qa-admin', '--snapshot'), added), 0);
+  match(added.out, /Created @qa-admin .* nothing saved yet/);
+  match(added.out, /terrific profiles open qa-admin/);
+  equalExit(await runCli(argv('profiles', 'add', 'daily'), captureIo(cwd, env)), 0);
+
+  const listed = captureIo(cwd, env);
+  equalExit(await runCli(argv('profiles'), listed), 0);
+  const slugs = listed.out.split('\n').map((row) => row.split(/\s+/)[0]);
+  equalText(slugs.slice(0, 3).join(' '), '@clean @daily @qa-admin');
+  match(listed.out, /@daily .* keeps logins and data/);
+
+  const duplicate = captureIo(cwd, env);
+  equalExit(await runCli(argv('profiles', 'add', 'daily'), duplicate), 1);
+  match(duplicate.err, /already exists/);
+
+  const renamed = captureIo(cwd, env);
+  equalExit(await runCli(argv('profiles', 'rename', 'qa-admin', 'admin'), renamed), 0);
+  match(renamed.out, /@qa-admin renamed to @admin/);
+
+  const removed = captureIo(cwd, env);
+  equalExit(await runCli(argv('profiles', 'rm', 'admin'), removed), 0);
+  match(removed.out, /Deleted @admin/);
+  const missing = captureIo(cwd, env);
+  equalExit(await runCli(argv('profiles', 'rm', 'admin'), missing), 1);
+  match(missing.err, /No profile called "admin"/);
 });
 
 test('doctor --json has the check shape and a writable temp data root', async () => {

@@ -1,6 +1,7 @@
 import type { ContextOnly } from './context-export.ts';
 import { type ErrorCode, TerrificError } from './errors.ts';
 import type { TerrificEvent } from './events.ts';
+import type { BrowserId, ProfileMode } from './profiles.ts';
 import type { EndpointClosedReason, EndpointState, SessionStatus } from './session.ts';
 import type { RecordOptions, SessionSetup } from './setup.ts';
 import type { SessionStats } from './stats.ts';
@@ -164,12 +165,33 @@ export type ContextRequest = {
   only?: ContextOnly[];
 };
 
+/** `clean` is the throwaway profile, `browser` a profile of an installed browser, the modes are profiles terrific owns. */
+export type ProfileKind = 'clean' | 'browser' | ProfileMode;
+
 export type ProfileView = {
   slug: string;
   label: string;
   detail: string;
   browser: string;
   blockedReason: string | null;
+  kind: ProfileKind;
+  /** True while `terrific profiles open` has the profile's browser open for setup. */
+  open: boolean;
+};
+
+export type CreateProfileRequest = {
+  name: string;
+  mode: ProfileMode;
+  browser?: BrowserId;
+  url?: string;
+};
+
+export type RenameProfileRequest = {
+  name: string;
+};
+
+export type OpenProfileRequest = {
+  url?: string;
 };
 
 export type ProjectSettingsView = {
@@ -200,6 +222,22 @@ export function healthPath(): string {
 
 export function profilesPath(): string {
   return '/v1/profiles';
+}
+
+export function profilePath(name: string): string {
+  return `/v1/profiles/${name}`;
+}
+
+export function renameProfilePath(name: string): string {
+  return `${profilePath(name)}/rename`;
+}
+
+export function openProfilePath(name: string): string {
+  return `${profilePath(name)}/open`;
+}
+
+export function closeProfilePath(name: string): string {
+  return `${profilePath(name)}/close`;
 }
 
 export function projectsPath(): string {

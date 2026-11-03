@@ -27,7 +27,6 @@ import type { IngestEvent, TerrificEvent } from '../src/core/events.ts';
 import type { RandomSource } from '../src/core/ids.ts';
 import type { SessionSetup } from '../src/core/setup.ts';
 import { type DaemonHandle, startDaemon } from '../src/daemon/daemon.ts';
-import { resolveBrowserProfile } from '../src/daemon/resolve-browser.ts';
 import { findInstalledBrowsers } from '../src/recorder/browsers.ts';
 
 const SITE = join(dirname(fileURLToPath(import.meta.url)), 'fixtures', 'site');
@@ -64,7 +63,7 @@ async function start(root?: string, now?: () => Date) {
     now: now ?? (() => new Date()),
     random: random(),
     maintenanceIntervalMs: 60_000,
-    resolveBrowser: (profile) => resolveBrowserProfile(profile, true),
+    headless: true,
   });
   handles.push(handle);
   return { handle, dataRoot };

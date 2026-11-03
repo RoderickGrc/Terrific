@@ -1,7 +1,8 @@
+import { existsSync } from 'node:fs';
 import { mkdtemp, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { type BrowserContext, chromium, type Page } from 'playwright-core';
+import { type Browser, type BrowserContext, chromium, type Page } from 'playwright-core';
 import { TerrificError } from '../core/errors.ts';
 
 export type LaunchOptions = {
@@ -11,6 +12,8 @@ export type LaunchOptions = {
   headless: boolean;
   browserName?: string;
   profileLabel?: string;
+  /** Saved storage state to start from in a fresh context; set for snapshot profiles. A missing file starts empty. */
+  storageState?: string;
 };
 
 export type LaunchedBrowser = {
@@ -28,10 +31,13 @@ function launchMessage(executablePath: string, error: unknown): string {
   return `Failed to launch ${executablePath}.`;
 }
 
+const BROWSER_ARGS = ['--no-first-run', '--no-default-browser-check'];
+
 export async function launchBrowser(options: LaunchOptions): Promise<LaunchedBrowser> {
+  if (options.storageState !== undefined) return launchFromState(options, options.storageState);
   const ephemeral = options.userDataDir === null;
   const userDataDir = options.userDataDir ?? (await mkdtemp(join(tmpdir(), 'terrific-browser-')));
-  const args = ['--no-first-run', '--no-default-browser-check'];
+  const args = [...BROWSER_ARGS];
   if (options.profileDirectory !== undefined && options.profileDirectory !== '') {
     args.push(`--profile-directory=${options.profileDirectory}`);
   }
@@ -69,6 +75,67 @@ export async function launchBrowser(options: LaunchOptions): Promise<LaunchedBro
       if (ephemeral) await removeProfileDir(userDataDir);
     },
   };
+}
+
+// A regular context, not a persistent one: only regular contexts accept a storage state.
+async function launchFromState(
+  options: LaunchOptions,
+  stateFile: string,
+): Promise<LaunchedBrowser> {
+  let browser: Browser;
+  try {
+    browser = await chromium.launch({
+      executablePath: options.executablePath,
+      headless: options.headless,
+      args: BROWSER_ARGS,
+    });
+  } catch (error) {
+    throw new TerrificError('INTERNAL', launchMessage(options.executablePath, error));
+  }
+  let context: BrowserContext;
+  try {
+    context = await browser.newContext({
+      viewport: null,
+      ...(existsSync(stateFile) ? { storageState: stateFile } : {}),
+    });
+  } catch (error) {
+    await browser.close().catch(() => undefined);
+    const text = error instanceof Error ? error.message : String(error);
+    throw new TerrificError('INTERNAL', `The saved profile state could not be loaded: ${text}`);
+  }
+  const page = await context.newPage();
+  let closed = false;
+  return {
+    context,
+    page,
+    async close() {
+      if (closed) return;
+      closed = true;
+      try {
+        await browser.close();
+      } catch {
+        // The user may already have closed the window.
+      }
+    },
+  };
+}
+
+/** Cookies, localStorage and IndexedDB of every origin the context visited, as JSON. */
+export async function captureState(context: BrowserContext): Promise<string> {
+  return JSON.stringify(await context.storageState({ indexedDB: true }));
+}
+
+/** True when a captured state holds at least one cookie or origin. */
+export function hasState(state: string): boolean {
+  try {
+    const value: unknown = JSON.parse(state);
+    if (typeof value !== 'object' || value === null) return false;
+    const cookies = 'cookies' in value && Array.isArray(value.cookies) ? value.cookies.length : 0;
+    const origins = 'origins' in value && Array.isArray(value.origins) ? value.origins.length : 0;
+    return cookies + origins > 0;
+  } catch {
+    return false;
+  }
 }
 
 // Chrome keeps writing to its profile for a moment after the context closes, which makes

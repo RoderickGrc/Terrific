@@ -13,6 +13,7 @@ export type DataPaths = {
   configFile: string;
   projectsIndex: string;
   projectsDir: string;
+  profilesDir: string;
   legacySessionsDir: string;
   legacyWorkspacesFile: string;
 };
@@ -32,6 +33,7 @@ export function dataPaths(root: string): DataPaths {
     configFile: join(root, 'config.json'),
     projectsIndex: join(root, 'projects.json'),
     projectsDir: join(root, 'projects'),
+    profilesDir: join(root, 'profiles'),
     legacySessionsDir: join(root, 'sessions'),
     legacyWorkspacesFile: join(root, 'workspaces.json'),
   };

@@ -15,3 +15,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - `terrific doctor` for Node, browser, data root, daemon, port, legacy stores and profiles
 - Interactive TUI: `terrific` with no arguments in a terminal opens home, the `/new` assistant and confirmation, the live log, the stop confirmation, the summary, `/sessions`, `/ingest`, `/settings` and `/help`; without a terminal it prints the help
 - Sessions started without a name are named after their local start time and page, for example `2026-11-03 08:22 haiku.ac`
+- Profiles terrific keeps: `terrific profiles add|open|close|rename|rm`, either persistent (keeps logins and data like a normal browser) or snapshot (every session starts from a saved login and site data). Comet's own profiles are marked blocked like Chrome's

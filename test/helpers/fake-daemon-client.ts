@@ -29,6 +29,8 @@ export const PROFILES: ProfileView[] = [
     detail: 'temporary profile',
     browser: 'Chrome',
     blockedReason: null,
+    kind: 'clean',
+    open: false,
   },
   {
     slug: 'testing',
@@ -36,6 +38,8 @@ export const PROFILES: ProfileView[] = [
     detail: 'Edge · Profile 2',
     browser: 'Edge',
     blockedReason: null,
+    kind: 'browser',
+    open: false,
   },
   {
     slug: 'personal',
@@ -43,6 +47,8 @@ export const PROFILES: ProfileView[] = [
     detail: 'Chrome · Default',
     browser: 'Chrome',
     blockedReason: 'Chrome 136+ blocks automation of its own profiles',
+    kind: 'browser',
+    open: false,
   },
 ];
 
@@ -189,6 +195,26 @@ export function createFakeDaemon(): FakeDaemon {
   const client: DaemonClient = {
     health: async () => ({ appVersion: '0.0.0', pid: 1, port: 4569, startedAt: '' }),
     listProfiles: async () => PROFILES,
+    createProfile: async (body) => {
+      record('createProfile', body);
+      return { ...PROFILES[1], slug: body.name, label: body.name, kind: body.mode } as ProfileView;
+    },
+    renameProfile: async (name, next) => {
+      record('renameProfile', name, next);
+      return { ...PROFILES[1], slug: next, label: next } as ProfileView;
+    },
+    removeProfile: async (name) => {
+      record('removeProfile', name);
+      return { ok: true };
+    },
+    openProfile: async (name) => {
+      record('openProfile', name);
+      return { ...PROFILES[1], slug: name, open: true } as ProfileView;
+    },
+    closeProfile: async (name) => {
+      record('closeProfile', name);
+      return { ...PROFILES[1], slug: name } as ProfileView;
+    },
     resolveProject: async () => PROJECT,
     listProjects: async () => [PROJECT],
     listEndpoints: async () => endpoints,

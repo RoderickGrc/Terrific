@@ -1,5 +1,5 @@
 import { isAbsolute } from 'node:path';
-import type { HealthView, ProfileView, ProjectView } from '../core/api.ts';
+import type { HealthView, ProjectView } from '../core/api.ts';
 import { TerrificError } from '../core/errors.ts';
 import { isRecord, isString } from '../core/validate.ts';
 import type { createProjectStore } from '../store/projects.ts';
@@ -14,7 +14,6 @@ export type CoreRouteDeps = {
   getPort: () => number;
   startedAt: string;
   requestShutdown: () => void;
-  listProfiles: () => ProfileView[];
 };
 
 function toProjectView(project: {
@@ -39,10 +38,6 @@ function readAbsoluteCwd(body: unknown): string {
 }
 
 export function registerCoreRoutes(router: Router, deps: CoreRouteDeps): void {
-  router.route('GET', '/v1/profiles', (ctx) => {
-    ctx.send(200, deps.listProfiles());
-  });
-
   router.route('GET', '/v1/health', (ctx) => {
     const body: HealthView = {
       appVersion: deps.appVersion,

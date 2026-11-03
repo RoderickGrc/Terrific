@@ -177,10 +177,12 @@ export class TuiApp implements Component, Focusable {
     }, 1000);
     this.refresher = setInterval(() => {
       if (this.state.screen !== 'home' && this.state.overlay?.type !== 'ingest') return;
-      this.deps.client
-        .listEndpoints(this.state.project.id)
-        .then((endpoints) => {
+      const { client } = this.deps;
+      // Profiles too, so ones added with `terrific profiles add` show up without a restart.
+      Promise.all([client.listEndpoints(this.state.project.id), client.listProfiles()])
+        .then(([endpoints, profiles]) => {
           this.state.endpoints = endpoints;
+          this.state.profiles = profiles;
           this.deps.requestRender();
         })
         .catch(() => undefined);

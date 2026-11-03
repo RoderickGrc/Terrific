@@ -1,6 +1,7 @@
 import { posix, win32 } from 'node:path';
+import type { BrowserId } from '../core/profiles.ts';
 
-export type BrowserId = 'chrome' | 'edge' | 'comet' | 'chromium';
+export type { BrowserId };
 
 export type InstalledBrowser = {
   id: BrowserId;

@@ -4,14 +4,17 @@ import { dirname } from 'node:path';
 import { dataPaths } from '../core/data-root.ts';
 import { isTerrificError, TerrificError } from '../core/errors.ts';
 import { type RandomSource, randomId } from '../core/ids.ts';
-import type { LaunchOptions } from '../recorder/launch.ts';
+import { type LaunchedBrowser, type LaunchOptions, launchBrowser } from '../recorder/launch.ts';
 import { writeJsonFile } from '../store/json-file.ts';
+import { createProfileStore } from '../store/profiles.ts';
 import { createProjectStore } from '../store/projects.ts';
 import { createRouter, mapError, type Router, sendJson } from './http.ts';
 import { createIngestService, type IngestHooks, type IngestService } from './ingest-service.ts';
-import { defaultResolveBrowser, listProfileViews } from './resolve-browser.ts';
+import { createProfileService, type ProfileService } from './profile-service.ts';
+import { discoverMachineProfiles, installedBrowsers } from './resolve-browser.ts';
 import { registerCoreRoutes } from './routes-core.ts';
 import { registerIngestRoutes } from './routes-ingest.ts';
+import { registerProfileRoutes } from './routes-profiles.ts';
 import { registerReadingRoutes } from './routes-reading.ts';
 import { registerSessionRoutes } from './routes-sessions.ts';
 import { createSessionCatalog } from './session-catalog.ts';
@@ -27,6 +30,7 @@ export type DaemonServices = {
   hooks: IngestHooks;
   ingest: IngestService;
   sessions: SessionService;
+  profiles: ProfileService;
   projects: ReturnType<typeof createProjectStore>;
   hub: StreamHub;
   router: Router;
@@ -48,7 +52,10 @@ export type StartDaemonOptions = {
   now: () => Date;
   random: RandomSource;
   maintenanceIntervalMs?: number;
-  resolveBrowser?: (profile: string) => LaunchOptions;
+  /** Runs every browser without a window; tests and `TERRIFIC_HEADLESS=1` set it. */
+  headless?: boolean;
+  /** Replaces the real browser launch, for tests. */
+  launch?: (options: LaunchOptions) => Promise<LaunchedBrowser>;
   onShutdown?: () => void;
 };
 
@@ -158,13 +165,20 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     getPort: () => runtime.port,
     hooks,
   });
+  const profiles = createProfileService({
+    store: createProfileStore({ dir: paths.profilesDir, now: options.now }),
+    headless: options.headless ?? false,
+    machineProfiles: discoverMachineProfiles,
+    installedBrowsers,
+    launch: options.launch ?? launchBrowser,
+  });
   const sessions = createSessionService({
     projects,
     ingest,
     hub,
     now: options.now,
     random: options.random,
-    resolveBrowser: options.resolveBrowser ?? defaultResolveBrowser,
+    resolveBrowser: (profile) => profiles.resolve(profile),
   });
   hooks.isLinked = (projectId, name) => sessions.isLinked(projectId, name);
   hooks.onIngest = (projectId, name, event) => sessions.onIngest(projectId, name, event);
@@ -196,8 +210,8 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     getPort: () => runtime.port,
     startedAt,
     requestShutdown,
-    listProfiles: listProfileViews,
   });
+  registerProfileRoutes(router, { profiles });
   registerIngestRoutes(router, { ingest, hub });
   registerSessionRoutes(router, {
     sessions,
@@ -259,7 +273,7 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     });
   }, intervalMs);
   timer.unref();
-  const services: DaemonServices = { hooks, ingest, sessions, projects, hub, router };
+  const services: DaemonServices = { hooks, ingest, sessions, profiles, projects, hub, router };
   handle = {
     port: runtime.port,
     token,
@@ -271,6 +285,7 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     async close(closeOptions) {
       clearInterval(timer);
       if (closeOptions?.stopSessions !== false) await sessions.stopAll();
+      await profiles.closeAll();
       router.closeConnections();
       hub.closeAll();
       server.closeAllConnections();

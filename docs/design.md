@@ -235,7 +235,11 @@ Every command talks to the daemon and starts it if needed. Default output is a f
 | `terrific ingest rename <name> <new>` | Rename; the URL does not change | Confirmation |
 | `terrific ingest rm <name>` | Delete; the URL stops working | Confirmation |
 | `terrific projects` | Known projects: id, path, last use | One line each |
-| `terrific profiles` | Browser profiles with their `@slug`, usable or blocked | One line each |
+| `terrific profiles` | Browser profiles with their `@slug`: clean, the ones terrific keeps, and the installed browsers' own, usable or blocked | One line each |
+| `terrific profiles add <name> [--snapshot] [--browser chrome|edge|chromium|comet] [--url <url>]` | Create a profile terrific keeps (section 5). Persistent by default | The new `@slug` |
+| `terrific profiles open <name> [url] [--no-wait]` | Open the profile's browser without recording, to log in or set it up. Waits until the window closes or Enter; a snapshot profile saves then | Saved or closed |
+| `terrific profiles close <name>` | Close a profile opened for setup; a snapshot profile saves first | State |
+| `terrific profiles rename <name> <new>`, `terrific profiles rm <name>` | Rename or delete a profile terrific keeps, with its data. Refused while it is open or in use | Confirmation |
 | `terrific daemon start\|stop\|status` | Manage the daemon explicitly | State |
 | `terrific doctor` | Check Node, browser, profiles, data dir, daemon, token | Problems and fixes |
 
@@ -270,6 +274,11 @@ An ingest endpoint is a URL that instrumented code posts diagnostic events to. I
   token
   config.json                  browser executables, defaults
   projects.json                index: project id -> { cwd, createdAt, lastOpenedAt }
+  profiles/
+    qa-admin/
+      profile.json             { name, mode, browser, url, createdAt, savedAt }
+      browser/                 user data dir of a persistent profile
+      state.json               saved cookies, localStorage and IndexedDB of a snapshot profile
   projects/
     k2m8q4zx/                  D:\work\shop-frontend
       project.json             { cwd, createdAt, lastOpenedAt }
@@ -289,6 +298,7 @@ An ingest endpoint is a URL that instrumented code posts diagnostic events to. I
 
 - **Project id.** 8 characters `[a-z0-9]`, the same format as the current workspace ids, so paths stay short (`Documents\.terrific\projects\k2m8q4zx`). The working directory is looked up in `projects.json`; if it is not there yet, terrific-cli reuses the id the directory already has in the old `workspaces.json` (for example `k2m8q4zx` for `shop-frontend`), and only creates a new id when there is none. Lookups compare the absolute path case-insensitively with any trailing `\.terrific` removed, which also merges the current duplicates such as `d:\…\blog-frontend` and `D:\…\blog-frontend` (the most recently used id wins). Each project folder also has `project.json` with its real path, so the index can be rebuilt and the folder explains itself when browsed. `terrific projects` lists id, path and last use.
 - **Session folder.** `YYYY-MM-DD_HH-MM-SS_<id>` in UTC, as today, so legacy and new folders sort the same way.
+- **Profiles terrific keeps.** Global, not per project, because a login serves every project. Two modes. `persistent` is its own user data dir under `profiles/<name>/browser`: every session reads and writes it like a normal browser, so logins and site data carry over; one browser at a time can use it. `snapshot` saves a Playwright storage state (cookies, localStorage, IndexedDB; not sessionStorage) with `terrific profiles open`, and every session starts from it in a fresh context, so what a session changes is dropped; several sessions can use it at once. This replaces terrific web's saved logins (`credentials.json`), which kept the same storage state. Owned profiles take their name as `@slug`; a browser profile with the same slug gets its browser appended (`@testing-comet`). Because their user data dirs are not a browser's default one, the Chrome 136 block (R2) does not apply. `state.json` holds session cookies and is never printed.
 - **Endpoint folder.** Named after the endpoint and renamed with it; the token in `endpoint.json` is what the URL uses.
 - **Lossless.** Filters and collapsing only apply when exporting context, never to what is stored. The current backend drops filtered network events from `events.json` at stop.
 - **Legacy reader.** Reads `metadata.json`, `events.json` or `events.jsonl` and the `*-context.txt` files, in place, from two kinds of legacy store. The old per-workspace stores (`<path>\.terrific\sessions`, listed in `Documents/.terrific/workspaces.json`, for example `D:\work\shop\.terrific\sessions` with 4 sessions) belong to the project whose path matches. The global store `Documents/.terrific/sessions` (about 520 sessions) has no reliable project link, so its sessions only appear with `--legacy` and are never assigned to a project by guessing. A migration command is deferred.
@@ -319,7 +329,7 @@ Readers fold `network` records by `requestId` into one request with its response
 | `PAGE_RELOAD` | `navigation` |
 | `SERVER_LOG`, `debug-ingest`, attachment | `ingest` event, ingest endpoint |
 | `debug_gateway` session | Session without a browser linked to an endpoint |
-| `credentials.json`, `credentialId`, `profileId`, `browserProfile` | Two separate concepts: **browser profile** (a real browser user data dir, `@slug`) and **saved login** (a stored cookie state, deferred) |
+| `credentials.json`, `credentialId`, `profileId`, `browserProfile` | Two separate concepts: **browser profile** (a real browser user data dir, `@slug`) and the **snapshot profile** terrific keeps (a saved storage state, section 5) |
 | `BrowserSession` (also used without a browser) | `Recording` |
 | Workspace, workspace hash | Project, project id (same ids, reused) |
 | `terrific.pid` | `daemon.json` |
@@ -357,7 +367,7 @@ Requirements it meets from the screens in section 2: fixed header and input with
 ## 10. Risks
 
 - **R1. Ctrl+Shift+Enter on Windows.** In Windows Terminal, Ctrl+Enter reaches the app as a different byte from Enter, but Node drops the modifier keys when it translates console input, so Ctrl+Shift+Enter will probably arrive the same as Ctrl+Enter. Sources: [Microsoft conpty keyboard spec](https://github.com/microsoft/terminal/blob/main/doc/specs/%234999%20-%20Improved%20keyboard%20handling%20in%20Conpty.md), [report on Windows Terminal](https://claudeissues.com/issue/87888-keybindings-ctrl-enter-shift-enter-never-reach-the-keybinding-matcher-on-windows), [report on libuv](https://claudeissues.com/issue/92771-windows-shift-enter-indistinguishable-from-enter-modifiers-dropped-by-libuv-cons). Mitigation: the spike tests it. If it fails, `/flag` stays and a second binding is added.
-- **R2. Chrome profiles.** Since Chrome 136, Chrome ignores the automation switches when they point at its default user data directory, which is where real Chrome profiles live ([Chrome blog](https://developer.chrome.com/blog/remote-debugging-port?hl=zh-cn), [report verified on Chrome 151](https://github.com/trycua/cua/issues/2916)). Profiles of other Chromium browsers with their own user data dir, such as Comet, are expected to work; that is an inference, not a verified test. Edge is treated as allowed because the same Chrome 136 block has not been verified there; if a non-clean Edge (or Chromium, or Comet) profile fails to launch, the error says that browser did not accept automation for that profile. A browser also locks its user data dir while it is open, so a profile cannot be used while that browser is running with it. Mitigation: `doctor` and the profile picker check both conditions; terrific-managed profiles under `Documents/.terrific/profiles/` are the fallback.
+- **R2. Chrome profiles.** Since Chrome 136, Chrome ignores the automation switches when they point at its default user data directory, which is where real Chrome profiles live ([Chrome blog](https://developer.chrome.com/blog/remote-debugging-port?hl=zh-cn), [report verified on Chrome 151](https://github.com/trycua/cua/issues/2916)). Profiles of other Chromium browsers with their own user data dir, such as Comet, are expected to work; that is an inference, not a verified test. Edge is treated as allowed because the same Chrome 136 block has not been verified there; if a non-clean Edge (or Chromium, or Comet) profile fails to launch, the error says that browser did not accept automation for that profile. A browser also locks its user data dir while it is open, so a profile cannot be used while that browser is running with it. Mitigation: `doctor` and the profile picker check both conditions; profiles terrific keeps under `Documents/.terrific/profiles/` are the fallback. On 2026-11-03 a tester reported that Comet refuses its own profiles too, so Comet profiles are now marked blocked like Chrome ones.
 - **R3. Two daemons during the transition.** The old backend and the new daemon both run browsers and write under `Documents/.terrific`. They use different ports and different folders (`sessions/` vs `projects/`), and the new one only reads `sessions/`.
 - **R4. In-page shortcuts.** Shortcuts injected into the tested page can collide with the browser's own shortcuts or with the app's. The spike lists free combinations in Chrome and Comet before choosing.
 
@@ -375,9 +385,8 @@ The build steps, stack, standards and release process are in `docs/plan.md`.
 **Deferred**
 
 - terrific web reading `projects/` (web stays on its current storage).
-- Saved logins (cookie states).
 - A command that copies legacy sessions into projects.
-- terrific-managed browser profiles, if R2 needs them.
+- Managing the profiles terrific keeps from the TUI; the CLI manages them and `/profile` lists and picks them.
 
 **Out of scope**
 
