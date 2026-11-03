@@ -72,6 +72,11 @@ export function assistLines(view: View, assist: Assist): Line[] {
     );
   const name = assist.parsed.name;
   out.push(
+    row(
+      'Name',
+      name === '' ? p(defaultSessionName(setup, new Date(state.now)), 'fg3') : p(name, 'fg1'),
+      'name',
+    ),
     row('Target', p(setup.target === 'browser' ? 'Browser' : 'No browser', 'fg1'), 'target'),
   );
   if (setup.target === 'browser') {
@@ -80,11 +85,6 @@ export function assistLines(view: View, assist: Assist): Line[] {
         'URL',
         setup.url === '' ? p('empty tab', 'fg3') : p(displayUrl(setup.url), 'accent'),
         'url',
-      ),
-      row(
-        'Name',
-        name === '' ? p(defaultSessionName(setup, new Date(state.now)), 'fg3') : p(name, 'fg1'),
-        'name',
       ),
       row(
         'Profile',
@@ -97,14 +97,6 @@ export function assistLines(view: View, assist: Assist): Line[] {
           .map((k) => p(k, 'fg1'))
           .join(' ') || p('nothing', 'fg3'),
         'record',
-      ),
-    );
-  } else {
-    out.push(
-      row(
-        'Name',
-        name === '' ? p(defaultSessionName(setup, new Date(state.now)), 'fg3') : p(name, 'fg1'),
-        'name',
       ),
     );
   }
@@ -254,7 +246,6 @@ export function confirmLines(view: View, overlay: NewOverlay): Line[] {
           })
           .join(sep(theme)),
       );
-      aside = p('one per session, stays open after it', 'fg3');
     }
     const labelText = {
       target: 'Target',

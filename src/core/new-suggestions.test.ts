@@ -68,6 +68,13 @@ test('caret on whitespace after a URL omits recent URLs', () => {
   deepEqual(labels(items), ['@profile', '#endpoint', '--flag']);
 });
 
+test('caret on whitespace omits the parts the line already has', () => {
+  const line = 'localhost:5173 @clean #app ';
+  deepEqual(labels(suggestNew(parsed(line), line.length, context)), ['--flag']);
+  const noBrowser = 'notes --no-browser --no-ingest ';
+  deepEqual(labels(suggestNew(parsed(noBrowser), noBrowser.length, context)).slice(3), ['--flag']);
+});
+
 test('caret on @q lists matching profiles and disables blocked ones', () => {
   const line = '@te';
   const items = suggestNew(parsed(line), line.length, context);

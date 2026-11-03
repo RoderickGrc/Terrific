@@ -132,8 +132,8 @@ export function isModal(overlay: Overlay | null): boolean {
 
 export function newFields(setup: SessionSetup): NewField[] {
   return setup.target === 'browser'
-    ? ['target', 'url', 'name', 'profile', 'record', 'endpoint']
-    : ['target', 'name', 'endpoint'];
+    ? ['name', 'target', 'url', 'profile', 'record', 'endpoint']
+    : ['name', 'target', 'endpoint'];
 }
 
 export function isBrowserSession(live: LiveState | null): boolean {

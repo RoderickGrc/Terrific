@@ -149,10 +149,13 @@ describe('tui', () => {
     const h = await open();
     h.type('/new');
     h.term.send(ENTER);
+    let text = await h.term.text();
+    match(text, /Name .*\n.*Target .*\n.*URL /);
+    h.term.send(DOWN);
     h.term.send(DOWN);
     h.term.send('\x15');
     h.type('htp:/x');
-    let text = await h.term.text();
+    text = await h.term.text();
     match(text, /not a URL yet/);
     h.term.send(ENTER);
     text = await h.term.text();

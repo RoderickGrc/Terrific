@@ -1,4 +1,4 @@
-import type { NewContext, ParsedNew, Token } from './new-command.ts';
+import type { NewContext, ParsedNew, Token, TokenKind } from './new-command.ts';
 import { NEW_FLAGS } from './new-command.ts';
 import type { EndpointOption, ProfileOption } from './setup.ts';
 import { displayUrl, isEndpointName } from './setup.ts';
@@ -109,11 +109,20 @@ export function suggestNew(
         out.push({ insert: url, label: url, detail: 'recent URL' });
       }
     }
-    out.push(
-      { insert: '@', label: '@profile', detail: 'browser profile' },
-      { insert: '#', label: '#endpoint', detail: 'the ingest endpoint for this session' },
-      { insert: '--', label: '--flag', detail: 'no browser, what to record' },
+    // Offer only the parts the line does not have yet.
+    const has = (kind: TokenKind): boolean => parsed.tokens.some((item) => item.kind === kind);
+    const flags = new Set(
+      parsed.tokens.filter((item) => item.kind === 'flag').map((item) => item.text),
     );
+    if (!has('profile') && !flags.has('--no-browser')) {
+      out.push({ insert: '@', label: '@profile', detail: 'browser profile' });
+    }
+    if (!has('endpoint') && !flags.has('--no-ingest')) {
+      out.push({ insert: '#', label: '#endpoint', detail: 'the ingest endpoint for this session' });
+    }
+    if (NEW_FLAGS.some((flag) => !flags.has(flag))) {
+      out.push({ insert: '--', label: '--flag', detail: 'no browser, what to record' });
+    }
     return out;
   }
   if (token.quoted) return [];
