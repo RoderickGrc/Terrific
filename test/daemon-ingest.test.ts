@@ -19,11 +19,11 @@ import {
   renameEndpointPath,
   resolveProjectPath,
 } from '../src/core/api.ts';
+import { dataPaths } from '../src/core/data-root.ts';
 import { isTerrificError } from '../src/core/errors.ts';
 import type { IngestEvent } from '../src/core/events.ts';
 import type { RandomSource } from '../src/core/ids.ts';
 import { type DaemonHandle, startDaemon } from '../src/daemon/daemon.ts';
-import { dataPaths } from '../src/store/data-root.ts';
 
 const dirs: string[] = [];
 const handles: DaemonHandle[] = [];
@@ -197,6 +197,14 @@ test('ingest lifecycle: up, post, close, reopen, rename, delete', async () => {
   equal(plain.status, 202);
   equal(plain.headers.get('access-control-allow-origin'), '*');
 
+  // `curl -d` sends form encoding; the body is still JSON and must be accepted.
+  const form = await fetch(created.url, {
+    method: 'POST',
+    headers: { 'content-type': 'application/x-www-form-urlencoded' },
+    body: JSON.stringify({ message: 'form' }),
+  });
+  equal(form.status, 202);
+
   const preflight = await fetch(created.url, { method: 'OPTIONS' });
   equal(preflight.status, 204);
   equal(preflight.headers.get('access-control-allow-origin'), '*');
@@ -223,7 +231,7 @@ test('ingest lifecycle: up, post, close, reopen, rename, delete', async () => {
   equal(afterClose.status, 410);
   equal(errorCode(await afterClose.json()), 'ENDPOINT_CLOSED');
   const still = (await call(handle, 'GET', eventsPath)).value as IngestEvent[];
-  equal(still.length, 2);
+  equal(still.length, 3);
 
   const reopened = asEndpoint(
     (await call(handle, 'POST', endpointsPath(projectId), { name: 'app' })).value,

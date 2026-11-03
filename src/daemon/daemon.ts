@@ -1,11 +1,10 @@
 import { appendFile, chmod, mkdir, readFile, unlink, writeFile } from 'node:fs/promises';
 import { createServer, type Server } from 'node:http';
 import { dirname } from 'node:path';
-import { DEFAULT_DAEMON_PORT } from '../core/api.ts';
+import { dataPaths } from '../core/data-root.ts';
 import { isTerrificError, TerrificError } from '../core/errors.ts';
 import { type RandomSource, randomId } from '../core/ids.ts';
 import type { LaunchOptions } from '../recorder/launch.ts';
-import { dataPaths } from '../store/data-root.ts';
 import { writeJsonFile } from '../store/json-file.ts';
 import { createProjectStore } from '../store/projects.ts';
 import { createRouter, mapError, type Router, sendJson } from './http.ts';
@@ -18,8 +17,6 @@ import { registerSessionRoutes } from './routes-sessions.ts';
 import { createSessionCatalog } from './session-catalog.ts';
 import { createSessionService, type SessionService } from './session-service.ts';
 import { createStreamHub, type StreamHub } from './stream-hub.ts';
-
-export { DEFAULT_DAEMON_PORT };
 
 export type DaemonLog = {
   info(message: string): void;
@@ -52,6 +49,7 @@ export type StartDaemonOptions = {
   random: RandomSource;
   maintenanceIntervalMs?: number;
   resolveBrowser?: (profile: string) => LaunchOptions;
+  onShutdown?: () => void;
 };
 
 type DaemonFile = {
@@ -76,15 +74,6 @@ function listenError(error: unknown, port: number): TerrificError {
   }
   const message = error instanceof Error ? error.message : 'Failed to listen.';
   return new TerrificError('INTERNAL', message);
-}
-
-export function parseDaemonPort(value: string | undefined): number {
-  if (value === undefined || value === '') return DEFAULT_DAEMON_PORT;
-  const port = Number(value);
-  if (!Number.isInteger(port) || port < 0 || port > 65535) {
-    throw new TerrificError('USAGE', 'TERRIFIC_PORT must be an integer between 0 and 65535.');
-  }
-  return port;
 }
 
 export function createDaemonLog(logPath: string, now: () => Date): DaemonLog {
@@ -184,12 +173,29 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     getPort: () => runtime.port,
     log,
   });
+  let handle: DaemonHandle | undefined;
+  let shuttingDown = false;
+  const requestShutdown = (): void => {
+    if (shuttingDown) return;
+    shuttingDown = true;
+    const current = handle;
+    if (current === undefined) return;
+    void current
+      .close()
+      .catch((error: unknown) => {
+        log.error('shutdown failed', error);
+      })
+      .finally(() => {
+        options.onShutdown?.();
+      });
+  };
   registerCoreRoutes(router, {
     projects,
     appVersion: options.appVersion,
     pid: process.pid,
     getPort: () => runtime.port,
     startedAt,
+    requestShutdown,
   });
   registerIngestRoutes(router, { ingest, hub });
   registerSessionRoutes(router, {
@@ -253,7 +259,7 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
   }, intervalMs);
   timer.unref();
   const services: DaemonServices = { hooks, ingest, sessions, projects, hub, router };
-  return {
+  handle = {
     port: runtime.port,
     token,
     url: `http://127.0.0.1:${runtime.port}`,
@@ -280,4 +286,5 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
       }
     },
   };
+  return handle;
 }

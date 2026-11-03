@@ -43,6 +43,11 @@ function forbiddenEdges(files: Map<string, string>): string[] {
       if (!dest) continue;
       const allowed = ALLOWED[from] ?? [];
       const sameLayer = dest === from && from !== 'bin';
+      const posix = file.replaceAll('\\', '/');
+      // `daemon run` is the only CLI command that starts the HTTP server; short
+      // commands must not load Playwright. Only a dynamic import from this file.
+      const daemonRun = posix === 'cli/commands/daemon.ts' && dest === 'daemon' && dynamic;
+      if (daemonRun) continue;
       if ((!sameLayer && !allowed.includes(dest)) || (from === 'bin' && !dynamic)) {
         edges.push(`src/${file} -> src/${destRel}`);
       }
@@ -80,6 +85,11 @@ test('forbiddenEdges reports bad imports and re-exports, and static imports in b
       ['daemon/a.ts', "import { b } from './b.ts';\n"],
       ['core/c.ts', "import { s } from '../store/s.ts';\n"],
       ['bin.ts', "import { run } from './cli/run.ts';\nawait import('./tui/app.ts');\n"],
+      // One entry with both forms: the dynamic import is the allowed exception, the static one is not.
+      [
+        'cli/commands/daemon.ts',
+        "import { startDaemon } from '../../daemon/daemon.ts';\nawait import('../../daemon/http.ts');\n",
+      ],
     ]),
   );
   equal(
@@ -89,6 +99,7 @@ test('forbiddenEdges reports bad imports and re-exports, and static imports in b
       'src/cli/x.ts -> src/store/z.ts',
       'src/core/c.ts -> src/store/s.ts',
       'src/bin.ts -> src/cli/run.ts',
+      'src/cli/commands/daemon.ts -> src/daemon/daemon.ts',
     ].join('\n'),
   );
 });

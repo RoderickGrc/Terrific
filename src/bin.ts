@@ -1,7 +1,11 @@
 #!/usr/bin/env node
-import pkg from '../package.json' with { type: 'json' };
+// Everything loads lazily so `--version` and short commands stay fast.
+const [{ runCli }, { processIo }] = await Promise.all([
+  import('./cli/program.ts'),
+  import('./cli/io.ts'),
+]);
 
-const version = pkg.version;
-const flag = process.argv.includes('--version') || process.argv.includes('-v');
-console.log(flag ? version : `terrific-cli ${version}: not implemented yet`);
-process.exit(0);
+const argv = process.argv;
+// The TUI opens here once it exists; until then no arguments shows the help.
+const args = argv.length <= 2 ? [...argv, '--help'] : argv;
+process.exitCode = await runCli(args, processIo());

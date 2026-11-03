@@ -1,7 +1,6 @@
 import { equal, ok } from 'node:assert/strict';
 import { test } from 'node:test';
-import type { ErrorCode } from './errors.ts';
-import { isTerrificError, TerrificError } from './errors.ts';
+import { type ErrorCode, isErrorCode, isTerrificError, TerrificError } from './errors.ts';
 
 const EXIT_CODES: { code: ErrorCode; exitCode: number }[] = [
   { code: 'USAGE', exitCode: 2 },
@@ -22,6 +21,12 @@ test('TerrificError maps each code to its exit code', () => {
     ok(error instanceof Error);
     ok(isTerrificError(error));
   }
+});
+
+test('isErrorCode accepts only the stable codes', () => {
+  equal(isErrorCode('NOT_FOUND'), true);
+  equal(isErrorCode('nope'), false);
+  equal(isErrorCode(1), false);
 });
 
 test('isTerrificError rejects other values', () => {

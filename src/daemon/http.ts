@@ -134,8 +134,10 @@ export async function readJsonBody(
 ): Promise<unknown> {
   const type = mimeType(headerValue(req.headers['content-type']));
   const json = type === '' || type === 'application/json';
-  const ok = json || (mode === 'ingest' && type === 'text/plain');
-  if (!ok) {
+  // Instrumented apps post with whatever their client sends: fetch without headers and
+  // sendBeacon use text/plain, `curl -d` uses form encoding. Ingest parses the body as JSON
+  // regardless, so a closed or unknown endpoint still answers 410 or 404, not 400.
+  if (!json && mode !== 'ingest') {
     throw new TerrificError('INVALID_INPUT', 'Content-Type must be application/json.');
   }
   const chunks: Buffer[] = [];

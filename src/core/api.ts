@@ -1,11 +1,20 @@
 import type { ContextOnly } from './context-export.ts';
-import type { ErrorCode } from './errors.ts';
+import { type ErrorCode, TerrificError } from './errors.ts';
 import type { TerrificEvent } from './events.ts';
 import type { EndpointClosedReason, EndpointState, SessionStatus } from './session.ts';
 import type { RecordOptions, SessionSetup } from './setup.ts';
 import type { SessionStats } from './stats.ts';
 
 export const DEFAULT_DAEMON_PORT = 4569;
+
+export function parseDaemonPort(value: string | undefined): number {
+  if (value === undefined || value === '') return DEFAULT_DAEMON_PORT;
+  const port = Number(value);
+  if (!Number.isInteger(port) || port < 0 || port > 65535) {
+    throw new TerrificError('USAGE', 'TERRIFIC_PORT must be an integer between 0 and 65535.');
+  }
+  return port;
+}
 export const MAX_BODY_BYTES = 1024 * 1024;
 export const ENDPOINT_IDLE_MS = 24 * 60 * 60 * 1000;
 export const DEFAULT_EVENT_LIMIT = 50;
@@ -267,4 +276,8 @@ export function sessionStreamPath(id: string): string {
 
 export function statusPath(): string {
   return '/v1/status';
+}
+
+export function daemonShutdownPath(): string {
+  return '/v1/daemon/shutdown';
 }

@@ -1,9 +1,9 @@
 import { join } from 'node:path';
+import { dataPaths } from '../core/data-root.ts';
 import { TerrificError } from '../core/errors.ts';
 import { isProjectId, newProjectId, type RandomSource } from '../core/ids.ts';
 import { type LegacyWorkspace, pickLegacyWorkspaceId, sameProject } from '../core/project-path.ts';
 import { isRecord, isString } from '../core/validate.ts';
-import { dataPaths } from './data-root.ts';
 import { readJsonFile, writeJsonFile } from './json-file.ts';
 
 export type ProjectInfo = {

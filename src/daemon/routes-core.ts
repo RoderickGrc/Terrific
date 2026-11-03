@@ -13,6 +13,7 @@ export type CoreRouteDeps = {
   pid: number;
   getPort: () => number;
   startedAt: string;
+  requestShutdown: () => void;
 };
 
 function toProjectView(project: {
@@ -60,5 +61,12 @@ export function registerCoreRoutes(router: Router, deps: CoreRouteDeps): void {
   router.route('GET', '/v1/projects', async (ctx) => {
     const projects = await deps.projects.list();
     ctx.send(200, projects.map(toProjectView));
+  });
+
+  router.route('POST', '/v1/daemon/shutdown', (ctx) => {
+    ctx.res.once('finish', () => {
+      deps.requestShutdown();
+    });
+    ctx.send(200, { ok: true });
   });
 }
