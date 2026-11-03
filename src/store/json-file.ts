@@ -1,6 +1,7 @@
 import { getRandomValues } from 'node:crypto';
 import { mkdir, readFile, rename, unlink, writeFile } from 'node:fs/promises';
 import { basename, dirname, join } from 'node:path';
+import { setTimeout as delay } from 'node:timers/promises';
 import { TerrificError } from '../core/errors.ts';
 import { randomId } from '../core/ids.ts';
 
@@ -13,14 +14,22 @@ function isErrno(error: unknown, code: string): boolean {
   return typeof error === 'object' && error !== null && 'code' in error && error.code === code;
 }
 
+const REPLACE_RETRIES = 10;
+const REPLACE_BACKOFF_MS = 10;
+
+// rename() replaces the destination on every platform, but Windows refuses while another handle
+// has it open (EPERM, EACCES or EBUSY), such as a read of the same file. Retry briefly instead of
+// deleting it first, so a reader never finds the file missing.
 async function replaceFile(tmp: string, dest: string): Promise<void> {
-  try {
-    await rename(tmp, dest);
-  } catch (error) {
-    // Windows cannot rename onto an existing file.
-    if (!isErrno(error, 'EEXIST') && !isErrno(error, 'EPERM')) throw error;
-    await unlink(dest);
-    await rename(tmp, dest);
+  for (let attempt = 0; ; attempt += 1) {
+    try {
+      await rename(tmp, dest);
+      return;
+    } catch (error) {
+      const busy = isErrno(error, 'EPERM') || isErrno(error, 'EACCES') || isErrno(error, 'EBUSY');
+      if (!busy || attempt >= REPLACE_RETRIES) throw error;
+      await delay(REPLACE_BACKOFF_MS * (attempt + 1));
+    }
   }
 }
 

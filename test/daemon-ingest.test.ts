@@ -266,6 +266,34 @@ test('ingest lifecycle: up, post, close, reopen, rename, delete', async () => {
   equal(unknown.status, 404);
 });
 
+test('parallel posts are all stored, in order, with their own seq', async () => {
+  const { handle } = await start();
+  const cwd = await tempRoot();
+  const projectId = (
+    (await call(handle, 'POST', resolveProjectPath(), { cwd })).value as ProjectView
+  ).id;
+  const created = asEndpoint(
+    (await call(handle, 'POST', endpointsPath(projectId), { name: 'burst' })).value,
+  );
+  const statuses = await Promise.all(
+    Array.from({ length: 40 }, (_, i) =>
+      fetch(created.url, { method: 'POST', body: JSON.stringify({ message: `m${i}` }) }).then(
+        (res) => res.status,
+      ),
+    ),
+  );
+  deepEqual([...new Set(statuses)], [202]);
+  const list = (await call(handle, 'GET', `${endpointEventsPath(projectId, 'burst')}?limit=100`))
+    .value as IngestEvent[];
+  equal(list.length, 40);
+  deepEqual(
+    list.map((event) => event.seq),
+    Array.from({ length: 40 }, (_, i) => i),
+  );
+  const views = (await call(handle, 'GET', endpointsPath(projectId))).value as EndpointView[];
+  equal(views.find((view) => view.name === 'burst')?.eventCount, 40);
+});
+
 test('SSE subscriber receives an ingest event posted after it subscribed', async () => {
   const { handle } = await start();
   const cwd = await tempRoot();

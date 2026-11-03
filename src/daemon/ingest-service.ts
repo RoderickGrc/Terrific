@@ -44,6 +44,23 @@ export async function createIngestService(options: {
 }): Promise<IngestService> {
   const stores = new Map<string, EndpointStore>();
   const tokens = new Map<string, TokenRef>();
+  const queues = new Map<string, Promise<void>>();
+
+  // Every write reads endpoint.json, then rewrites it (event count, last event, state). Posts arrive
+  // in parallel, so without a queue two of them read the same count and one update is lost.
+  function serial<T>(projectId: string, job: () => Promise<T>): Promise<T> {
+    const previous = queues.get(projectId) ?? Promise.resolve();
+    const run = previous.then(job, job);
+    const settled = run.then(
+      () => undefined,
+      () => undefined,
+    );
+    queues.set(projectId, settled);
+    void settled.then(() => {
+      if (queues.get(projectId) === settled) queues.delete(projectId);
+    });
+    return run;
+  }
 
   function toView(record: EndpointRecord): EndpointView {
     return {
@@ -184,7 +201,7 @@ export async function createIngestService(options: {
   async function closeIdle(): Promise<void> {
     for (const project of await options.projects.list()) {
       const store = await storeFor(project.id);
-      await store.closeIdle(ENDPOINT_IDLE_MS);
+      await serial(project.id, () => store.closeIdle(ENDPOINT_IDLE_MS));
     }
   }
 
@@ -194,5 +211,18 @@ export async function createIngestService(options: {
     return get(ref.projectId, ref.name);
   }
 
-  return { up, down, rename, remove, list, get, tail, receive, closeIdle, findByToken };
+  return {
+    up: (projectId, name) => serial(projectId, () => up(projectId, name)),
+    down: (projectId, name) => serial(projectId, () => down(projectId, name)),
+    rename: (projectId, name, next) => serial(projectId, () => rename(projectId, name, next)),
+    remove: (projectId, name) => serial(projectId, () => remove(projectId, name)),
+    list,
+    get,
+    tail,
+    // An unknown token has no project; receive() itself answers 404 for it.
+    receive: (token, body) =>
+      serial(tokens.get(token)?.projectId ?? '', () => receive(token, body)),
+    closeIdle,
+    findByToken,
+  };
 }
