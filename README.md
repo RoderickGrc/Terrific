@@ -21,3 +21,7 @@ See [docs/design.md](docs/design.md) for intended behavior and [docs/plan.md](do
 ## Automation
 
 Set `TERRIFIC_HOME` to choose the data root, `TERRIFIC_PORT` for the daemon listen port (default 4569), and `TERRIFIC_HEADLESS=1` so `daemon run` launches the browser without a window for agents and CI.
+
+## Agent skill
+
+`skills/terrific` teaches coding agents to debug with terrific: open an ingest endpoint, instrument, record a session, and read the evidence. Copy the folder into your agent's skills directory, for example `~/.claude/skills/terrific` for Claude Code.
