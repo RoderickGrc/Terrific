@@ -1201,7 +1201,7 @@ export class TuiApp implements Component, Focusable {
       this.toast(
         'warn',
         rename
-          ? 'Legacy sessions are read only. Rename sessions recorded with terrific-cli.'
+          ? 'Legacy sessions from terrific-web are read only'
           : 'Legacy sessions are read only and are never deleted from here.',
       );
     } else if (rename) {

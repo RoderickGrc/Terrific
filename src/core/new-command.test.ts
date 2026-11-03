@@ -158,7 +158,7 @@ test('problem messages listed while typing, verbatim', () => {
       '--mobile',
       {
         severity: 'invalid',
-        message: 'terrific-cli records no video and always uses the dynamic viewport',
+        message: 'terrific records no video and always uses the dynamic viewport',
       },
     ],
     [
@@ -166,7 +166,7 @@ test('problem messages listed while typing, verbatim', () => {
       '--video',
       {
         severity: 'invalid',
-        message: 'terrific-cli records no video and always uses the dynamic viewport',
+        message: 'terrific records no video and always uses the dynamic viewport',
       },
     ],
     [
@@ -174,7 +174,7 @@ test('problem messages listed while typing, verbatim', () => {
       '--tablet',
       {
         severity: 'invalid',
-        message: 'terrific-cli records no video and always uses the dynamic viewport',
+        message: 'terrific records no video and always uses the dynamic viewport',
       },
     ],
     [
@@ -182,7 +182,7 @@ test('problem messages listed while typing, verbatim', () => {
       '--hd',
       {
         severity: 'invalid',
-        message: 'terrific-cli records no video and always uses the dynamic viewport',
+        message: 'terrific records no video and always uses the dynamic viewport',
       },
     ],
     [
@@ -190,7 +190,7 @@ test('problem messages listed while typing, verbatim', () => {
       '--fhd',
       {
         severity: 'invalid',
-        message: 'terrific-cli records no video and always uses the dynamic viewport',
+        message: 'terrific records no video and always uses the dynamic viewport',
       },
     ],
     [
@@ -198,7 +198,7 @@ test('problem messages listed while typing, verbatim', () => {
       '--dynamic',
       {
         severity: 'invalid',
-        message: 'terrific-cli records no video and always uses the dynamic viewport',
+        message: 'terrific records no video and always uses the dynamic viewport',
       },
     ],
     [
@@ -206,7 +206,7 @@ test('problem messages listed while typing, verbatim', () => {
       '--viewport-wide',
       {
         severity: 'invalid',
-        message: 'terrific-cli records no video and always uses the dynamic viewport',
+        message: 'terrific records no video and always uses the dynamic viewport',
       },
     ],
     ['--xyz', '--xyz', { severity: 'invalid', message: 'unknown flag --xyz' }],

@@ -68,7 +68,7 @@ function listenError(error: unknown, port: number): TerrificError {
   if (isErrno(error, 'EADDRINUSE')) {
     return new TerrificError(
       'CONFLICT',
-      `Port ${port} is in use. Is another terrific-cli daemon running? ` +
+      `Port ${port} is in use. Is another terrific daemon running? ` +
         'Set TERRIFIC_PORT to use another port.',
     );
   }

@@ -19,7 +19,7 @@ export type ConnectedDaemon = {
   started: boolean;
 };
 
-const UNREACHABLE = 'Cannot reach the terrific-cli daemon.';
+const UNREACHABLE = 'Cannot reach the terrific daemon.';
 const POLL_MS = 100;
 const POLL_LIMIT_MS = 10_000;
 

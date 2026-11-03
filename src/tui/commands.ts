@@ -106,7 +106,7 @@ export const COMMANDS: CommandSpec[] = [
   },
   { name: 'settings', description: 'Defaults and what the live log shows', screens: ALL },
   { name: 'help', description: 'Keys and commands', screens: ALL },
-  { name: 'quit', description: 'Leave terrific-cli', screens: ALL },
+  { name: 'quit', description: 'Leave terrific', screens: ALL },
 ];
 
 export type CommandScope = {

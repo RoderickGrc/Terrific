@@ -15,7 +15,7 @@
   "author": "Rodrigo Garciaguirre",
   "type": "module",
   "bin": {
-    "terrific-cli": "dist/bin.js"
+    "terrific": "dist/bin.js"
   },
   "files": [
     "dist",

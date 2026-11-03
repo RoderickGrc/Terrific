@@ -299,7 +299,7 @@ test('reading routes: list, detail, events, context, prompt, rename, delete, set
   const prompt = (agent.value as PromptResponse).text;
   ok(prompt.includes(first.id));
   ok(prompt.includes(written.path));
-  ok(prompt.includes('terrific-cli events'));
+  ok(prompt.includes('terrific events'));
 
   const full = await call(handle, 'GET', `${sessionPromptPath(first.id)}?kind=full`);
   equal(full.status, 200);

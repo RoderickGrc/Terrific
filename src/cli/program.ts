@@ -51,11 +51,11 @@ function handleError(error: unknown, io: CliIo, json: boolean): number {
 function createProgram(io: CliIo): Command {
   const program = new Command();
   program
-    .name('terrific-cli')
+    .name('terrific')
     .description('Record QA sessions in a real browser from your terminal')
     .version(pkg.version, '--version')
     .exitOverride()
-    .showHelpAfterError('(run terrific-cli --help for usage)')
+    .showHelpAfterError('(run terrific --help for usage)')
     .configureOutput({
       writeOut: (text) => {
         io.stdout(text);

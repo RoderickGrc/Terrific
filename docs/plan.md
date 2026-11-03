@@ -62,7 +62,7 @@ terrific-cli/
 
 Unit tests sit next to the file they test (`src/core/new-parser.test.ts`); integration tests that cross layers live in `test/`. The bundler only follows imports from `src/bin.ts`, so tests never reach `dist/`.
 
-The daemon is not a second entry point. `terrific-cli daemon run` runs it in the foreground; the client starts it detached with that same command. One binary, one build output, and the foreground mode doubles as the debugging tool.
+The daemon is not a second entry point. `terrific daemon run` runs it in the foreground; the client starts it detached with that same command. One binary, one build output, and the foreground mode doubles as the debugging tool.
 
 ### Dependency rule
 
@@ -115,7 +115,7 @@ Coverage is reported, not gated. The CI gate is: Biome, `tsc`, tests, build, `pu
   "description": "Record QA sessions in a real browser from your terminal, with context ready for coding agents",
   "license": "MIT",
   "type": "module",
-  "bin": { "terrific-cli": "dist/bin.js" },
+  "bin": { "terrific": "dist/bin.js" },
   "files": ["dist"],
   "engines": { "node": ">=22.19.0" },
   "repository": { "type": "git", "url": "git+https://github.com/RoderickGrc/terrific-cli.git" },

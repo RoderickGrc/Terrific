@@ -76,11 +76,7 @@ export function eventDetails(theme: Theme, event: TerrificEvent, sessionId: stri
           event.status === undefined ? (event.errorText ?? 'pending') : String(event.status),
         ),
         kv(theme, 'time', event.durationMs === undefined ? 'n/a' : `${event.durationMs} ms`),
-        kv(
-          theme,
-          'bodies',
-          `terrific-cli events ${sessionId} --at ${formatOffset(event.t)} --bodies`,
-        ),
+        kv(theme, 'bodies', `terrific events ${sessionId} --at ${formatOffset(event.t)} --bodies`),
       ];
     case 'action': {
       const rows = [

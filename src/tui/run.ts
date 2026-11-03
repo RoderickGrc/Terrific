@@ -150,8 +150,8 @@ export async function detachedMessage(
     const name = session.name === null ? '' : ` "${session.name}"`;
     lines.push(
       `Session ${session.id}${name} is still recording in the background${time}.`,
-      cmd('terrific-cli', 'reopen it, then /attach'),
-      cmd(`terrific-cli stop ${session.id}`, 'stop it and print the summary'),
+      cmd('terrific', 'reopen it, then /attach'),
+      cmd(`terrific stop ${session.id}`, 'stop it and print the summary'),
     );
   }
   if (endpoints.length > 0) {
@@ -159,18 +159,14 @@ export async function detachedMessage(
       `Ingest endpoints still open: ${endpoints.map((e) => e.name).join(', ')}. They keep receiving.`,
     );
   }
-  if (lines.length > 0)
-    lines.push(cmd('terrific-cli status', 'running sessions and ingest endpoints'));
+  if (lines.length > 0) lines.push(cmd('terrific status', 'running sessions and ingest endpoints'));
   return lines.length === 0 ? '' : `${lines.join('\n')}\n`;
 }
 
 export async function runTui(options: TuiOptions): Promise<number> {
   try {
     const dataRoot = resolveDataRoot(options);
-    const slow = setTimeout(
-      () => options.stderr('Starting the terrific-cli daemon…\n'),
-      SLOW_START_MS,
-    );
+    const slow = setTimeout(() => options.stderr('Starting the terrific daemon…\n'), SLOW_START_MS);
     let client: DaemonClient;
     try {
       ({ client } = await connectDaemon({ dataRoot, env: options.env, autoStart: true }));

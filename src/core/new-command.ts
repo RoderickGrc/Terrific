@@ -56,7 +56,7 @@ export const NEW_FLAGS = [
 ] as const;
 
 const VIEWPORT_FLAG = /^--(video|mobile|tablet|hd|fhd|dynamic|viewport)/;
-const VIEWPORT_MESSAGE = 'terrific-cli records no video and always uses the dynamic viewport';
+const VIEWPORT_MESSAGE = 'terrific records no video and always uses the dynamic viewport';
 
 export function tokenizeNewArgs(line: string): RawToken[] {
   const tokens: RawToken[] = [];

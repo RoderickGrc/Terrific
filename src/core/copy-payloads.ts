@@ -183,12 +183,10 @@ export function agentPrompt(input: CopyInput): string {
     );
   }
   lines.push('', 'Targeted reads:');
-  lines.push(`  terrific-cli events ${session.id} --type bug,flag,note`);
+  lines.push(`  terrific events ${session.id} --type bug,flag,note`);
   const firstMark = stats.marks[0];
   if (firstMark !== undefined) {
-    lines.push(
-      `  terrific-cli events ${session.id} --around ${aroundStamp(firstMark.t)} --window 10s`,
-    );
+    lines.push(`  terrific events ${session.id} --around ${aroundStamp(firstMark.t)} --window 10s`);
   }
   return lines.join('\n');
 }

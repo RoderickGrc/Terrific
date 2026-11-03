@@ -94,8 +94,8 @@ test('agentPrompt lists marks, failures, files and targeted reads', () => {
       '- Raw events: D:\\work\\demo-app\\.terrific\\sessions\\s1\\events.jsonl',
       '',
       'Targeted reads:',
-      '  terrific-cli events ab12cd34ef --type bug,flag,note',
-      '  terrific-cli events ab12cd34ef --around 00:04 --window 10s',
+      '  terrific events ab12cd34ef --type bug,flag,note',
+      '  terrific events ab12cd34ef --around 00:04 --window 10s',
     ].join('\n'),
   );
 });

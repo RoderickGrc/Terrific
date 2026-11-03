@@ -132,7 +132,7 @@ function daemonCheck(ok: boolean): DoctorCheck {
     'daemon',
     ok,
     ok ? 'reachable with the stored token' : 'daemon is not reachable',
-    'terrific-cli daemon start',
+    'terrific daemon start',
   );
 }
 
@@ -152,7 +152,7 @@ async function portHeld(port: number): Promise<boolean> {
 
 async function portCheck(port: number, daemonOk: boolean): Promise<DoctorCheck> {
   if (daemonOk) {
-    return check('port', true, `${port} is held by the terrific-cli daemon`);
+    return check('port', true, `${port} is held by the terrific daemon`);
   }
   const busy = await portHeld(port);
   if (!busy) return check('port', true, `${port} is free`);

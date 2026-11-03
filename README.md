@@ -4,7 +4,7 @@ Record QA sessions in a real browser from your terminal, with context ready for 
 
 ## Status
 
-This package is under active development and has not been published yet. Run `terrific-cli` in a project folder to open the interactive TUI, or `terrific-cli --help` for the commands agents and scripts use.
+This package is under active development and has not been published yet. The package installs the `terrific` command. Run `terrific` in a project folder to open the interactive TUI, or `terrific --help` for the commands agents and scripts use.
 
 ## Development
 

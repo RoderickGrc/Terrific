@@ -44,7 +44,7 @@ export function resolveBrowserProfile(profile: string, headless: boolean): Launc
   if (found === undefined) {
     throw new TerrificError(
       'USAGE',
-      `No browser profile called "${profile}". Run terrific-cli profiles to list them.`,
+      `No browser profile called "${profile}". Run terrific profiles to list them.`,
     );
   }
   if (found.blockedReason !== null) {

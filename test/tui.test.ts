@@ -292,7 +292,7 @@ describe('tui', () => {
     h.type('import');
     h.term.send('\x12');
     text = await h.term.text();
-    match(text, /Legacy sessions are read only/);
+    match(text, /Legacy sessions from terrific-web are read only/);
     for (let i = 0; i < 'import'.length; i += 1) h.term.send('\x7f');
     h.type('checkout');
     h.term.send(ENTER);
@@ -334,7 +334,7 @@ describe('tui', () => {
     await h.tui.done;
     const message = await detachedMessage(h.fake.client, PROJECT.id, Date.now());
     match(message, /Session s-new-1 "left running" is still recording in the background/);
-    match(message, /terrific-cli stop s-new-1 +stop it and print the summary/);
+    match(message, /terrific stop s-new-1 +stop it and print the summary/);
     match(message, /Ingest endpoints still open: app\./);
   });
 

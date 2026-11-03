@@ -9,7 +9,7 @@ terrific-cli is a clean rewrite of Terrific as a separate project. It becomes th
 | Topic | Decision |
 |---|---|
 | Engine | Full rewrite, based on the current behavior, with clean architecture and honest names |
-| Package | Separate project and package, command `terrific-cli` |
+| Package | Separate project and package `terrific-cli`, command `terrific`. The terrific web command becomes `terrific-web` |
 | Background process | One daemon shared by all projects on the machine |
 | Storage | `<data root>/projects/<project-id>/`. The data root is the one terrific already uses: `Documents/.terrific` on Windows, `~/.terrific` elsewhere, or `TERRIFIC_HOME` when set |
 | Project id | Short 8-character id, the same format terrific already uses for workspaces; the id terrific already gave a directory is reused |
@@ -39,7 +39,7 @@ terrific-cli is a clean rewrite of Terrific as a separate project. It becomes th
 
 ## 2. Interactive TUI
 
-Launched with `terrific-cli` in any directory. The working directory is the project. The TUI is a client of the daemon; closing it never stops a recording or an ingest endpoint.
+Launched with `terrific` in any directory. The working directory is the project. The TUI is a client of the daemon; closing it never stops a recording or an ingest endpoint.
 
 ### UX rules
 
@@ -52,7 +52,7 @@ These come from the design reviews and apply to every screen and to the non-inte
 5. **Colors carry meaning, shared with terrific web.** Event types use the exact colors of terrific web, only on the type tag and on markers. The interface itself stays in the anygent grey scale with the lavender accent for focus and selection. Red and amber are reserved for bugs, flags, errors and warnings.
 6. **Hide what cannot apply.** Browser fields, `/screenshot`, `/snapshot`, F5 and F6 do not exist in a session without a browser. Commands only appear in the palette where they work. Options that the CLI does not support (video, viewport presets) are rejected with the reason, not silently ignored.
 7. **Destructive actions confirm; legacy data is read only.** Delete needs a second Ctrl+D. Rename and delete refuse legacy sessions.
-8. **Parity with the CLI.** Everything the TUI does has a non-interactive command, and `/new …` uses the same grammar as `terrific-cli start …`.
+8. **Parity with the CLI.** Everything the TUI does has a non-interactive command, and `/new …` uses the same grammar as `terrific start …`.
 9. **Own identity.** Layouts are designed for this tool, not borrowed from other TUIs.
 
 ### Screens
@@ -94,7 +94,7 @@ While typing, on every keystroke the assistant shows:
 
 - The typed line again, each part in its color (URL lavender, name bold white, profile blue, endpoint orange, flags grey), with the part under the cursor highlighted and problems underlined in amber (incomplete) or red (invalid).
 - The resulting configuration, one row per field, and on the right where each value came from: the token that set it, or "last setup".
-- One line per problem with the reason, for example `--no-con incomplete flag, Tab completes it`, `@te incomplete profile`, `htp://x not a valid URL, read as part of the name`, `--mobile terrific-cli records no video and always uses the dynamic viewport`, or a blocked Chrome profile with its reason.
+- One line per problem with the reason, for example `--no-con incomplete flag, Tab completes it`, `@te incomplete profile`, `htp://x not a valid URL, read as part of the name`, `--mobile terrific records no video and always uses the dynamic viewport`, or a blocked Chrome profile with its reason.
 - Suggestions for the part under the cursor: profiles after `@`, endpoints (and "create this endpoint") after `#`, flags after `--`, recent URLs while typing one, and, when the cursor is on a space, the prefixes the line does not use yet (no `@` once a profile is set, no `#` once an endpoint is set or with `--no-ingest`). Tab applies the highlighted suggestion; arrows move between suggestions.
 
 Enter opens the confirmation even if some parts are invalid; those are dropped and listed in a notice.
@@ -206,7 +206,7 @@ The last setup (target, URL, profile, record choices), the live log visibility a
 
 ### Copy payloads
 
-- **Agent prompt.** Session id and name, project path, time range, browser or not, the endpoint with its URL and state, counts, errors, the tester's bugs and flags with timestamps, absolute paths to `context.txt`, `events.jsonl` and screenshots, and two `terrific-cli events` commands for targeted reads.
+- **Agent prompt.** Session id and name, project path, time range, browser or not, the endpoint with its URL and state, counts, errors, the tester's bugs and flags with timestamps, absolute paths to `context.txt`, `events.jsonl` and screenshots, and two `terrific events` commands for targeted reads.
 - **Bugs and errors.** Each bug and flag with the events from the 10 seconds before it, then failed requests and errors, then the context path.
 - **Full context.** The whole `context.txt`.
 - **Ingest endpoint.** URL, payload fields and a `curl` example for the session's endpoint.
@@ -217,35 +217,35 @@ Every command talks to the daemon and starts it if needed. Default output is a f
 
 | Command | Purpose | Default output |
 |---|---|---|
-| `terrific-cli` | Open the TUI | n/a |
-| `terrific-cli start [url] [name] [@profile] [#endpoint] [--flags]` | Start recording and return immediately. Same grammar as `/new`, without the confirmation | Session id, folder path, endpoint URL |
-| `terrific-cli stop [<id>] [--name <name>]` | Stop a session (the only running one if no id), optionally renaming it. No confirmation. The endpoint stays open | The summary |
-| `terrific-cli status` | Daemon, running sessions, open endpoints | One line each |
-| `terrific-cli sessions [--all-projects] [--legacy]` | List sessions | One line each |
-| `terrific-cli show <id>` | Summary of a session | Same as the TUI summary |
-| `terrific-cli note <id> <text>`, `terrific-cli bug\|flag <id> [<text>]` | Add a note, or mark a bug or flag with optional text | Mark id and time |
-| `terrific-cli screenshot\|snapshot <id>` | Capture the page of a browser session | File path |
-| `terrific-cli events <id> [--type ...] [--around mm:ss --window 10s] [--at mm:ss --bodies] [--follow]` | Read events; `--follow` streams new ones until the session stops | Event lines |
-| `terrific-cli context <id> [--only bug,flag,note,errors]` | Write or refresh `context.txt` | Path, size, approximate tokens |
-| `terrific-cli prompt <id> [--bugs \| --full]` | Print what `/copy` copies | The text |
-| `terrific-cli ingest up <name>` | Create the endpoint, or reopen it if closed. Same URL every time | Name, URL, state |
-| `terrific-cli ingest down <name>` | Close it; the URL stays reserved | Confirmation |
-| `terrific-cli ingest list` | Endpoints of this project | One line each |
-| `terrific-cli ingest tail <name> [--follow]` | Events received by an endpoint, with or without a session | Event lines |
-| `terrific-cli ingest rename <name> <new>` | Rename; the URL does not change | Confirmation |
-| `terrific-cli ingest rm <name>` | Delete; the URL stops working | Confirmation |
-| `terrific-cli projects` | Known projects: id, path, last use | One line each |
-| `terrific-cli profiles` | Browser profiles with their `@slug`, usable or blocked | One line each |
-| `terrific-cli daemon start\|stop\|status` | Manage the daemon explicitly | State |
-| `terrific-cli doctor` | Check Node, browser, profiles, data dir, daemon, token | Problems and fixes |
+| `terrific` | Open the TUI | n/a |
+| `terrific start [url] [name] [@profile] [#endpoint] [--flags]` | Start recording and return immediately. Same grammar as `/new`, without the confirmation | Session id, folder path, endpoint URL |
+| `terrific stop [<id>] [--name <name>]` | Stop a session (the only running one if no id), optionally renaming it. No confirmation. The endpoint stays open | The summary |
+| `terrific status` | Daemon, running sessions, open endpoints | One line each |
+| `terrific sessions [--all-projects] [--legacy]` | List sessions | One line each |
+| `terrific show <id>` | Summary of a session | Same as the TUI summary |
+| `terrific note <id> <text>`, `terrific bug\|flag <id> [<text>]` | Add a note, or mark a bug or flag with optional text | Mark id and time |
+| `terrific screenshot\|snapshot <id>` | Capture the page of a browser session | File path |
+| `terrific events <id> [--type ...] [--around mm:ss --window 10s] [--at mm:ss --bodies] [--follow]` | Read events; `--follow` streams new ones until the session stops | Event lines |
+| `terrific context <id> [--only bug,flag,note,errors]` | Write or refresh `context.txt` | Path, size, approximate tokens |
+| `terrific prompt <id> [--bugs \| --full]` | Print what `/copy` copies | The text |
+| `terrific ingest up <name>` | Create the endpoint, or reopen it if closed. Same URL every time | Name, URL, state |
+| `terrific ingest down <name>` | Close it; the URL stays reserved | Confirmation |
+| `terrific ingest list` | Endpoints of this project | One line each |
+| `terrific ingest tail <name> [--follow]` | Events received by an endpoint, with or without a session | Event lines |
+| `terrific ingest rename <name> <new>` | Rename; the URL does not change | Confirmation |
+| `terrific ingest rm <name>` | Delete; the URL stops working | Confirmation |
+| `terrific projects` | Known projects: id, path, last use | One line each |
+| `terrific profiles` | Browser profiles with their `@slug`, usable or blocked | One line each |
+| `terrific daemon start\|stop\|status` | Manage the daemon explicitly | State |
+| `terrific doctor` | Check Node, browser, profiles, data dir, daemon, token | Problems and fixes |
 
 ### Agent flow: "let's test the system fullstack"
 
 ```
-terrific-cli ingest up app                          # create or reopen; always the same URL
-terrific-cli start localhost:5173 "fullstack" #app  # browser session linked to app
-terrific-cli events <id> --follow                   # watch while the person tests
-terrific-cli stop <id>                              # app stays open for the next session
+terrific ingest up app                          # create or reopen; always the same URL
+terrific start localhost:5173 "fullstack" #app  # browser session linked to app
+terrific events <id> --follow                   # watch while the person tests
+terrific stop <id>                              # app stays open for the next session
 ```
 
 The app being tested keeps the endpoint URL in its own config (for example `.env`) and never needs to change it.
@@ -287,7 +287,7 @@ An ingest endpoint is a URL that instrumented code posts diagnostic events to. I
   sessions/                    legacy store, read only
 ```
 
-- **Project id.** 8 characters `[a-z0-9]`, the same format as the current workspace ids, so paths stay short (`Documents\.terrific\projects\k2m8q4zx`). The working directory is looked up in `projects.json`; if it is not there yet, terrific-cli reuses the id the directory already has in the old `workspaces.json` (for example `k2m8q4zx` for `shop-frontend`), and only creates a new id when there is none. Lookups compare the absolute path case-insensitively with any trailing `\.terrific` removed, which also merges the current duplicates such as `d:\…\blog-frontend` and `D:\…\blog-frontend` (the most recently used id wins). Each project folder also has `project.json` with its real path, so the index can be rebuilt and the folder explains itself when browsed. `terrific-cli projects` lists id, path and last use.
+- **Project id.** 8 characters `[a-z0-9]`, the same format as the current workspace ids, so paths stay short (`Documents\.terrific\projects\k2m8q4zx`). The working directory is looked up in `projects.json`; if it is not there yet, terrific-cli reuses the id the directory already has in the old `workspaces.json` (for example `k2m8q4zx` for `shop-frontend`), and only creates a new id when there is none. Lookups compare the absolute path case-insensitively with any trailing `\.terrific` removed, which also merges the current duplicates such as `d:\…\blog-frontend` and `D:\…\blog-frontend` (the most recently used id wins). Each project folder also has `project.json` with its real path, so the index can be rebuilt and the folder explains itself when browsed. `terrific projects` lists id, path and last use.
 - **Session folder.** `YYYY-MM-DD_HH-MM-SS_<id>` in UTC, as today, so legacy and new folders sort the same way.
 - **Endpoint folder.** Named after the endpoint and renamed with it; the token in `endpoint.json` is what the URL uses.
 - **Lossless.** Filters and collapsing only apply when exporting context, never to what is stored. The current backend drops filtered network events from `events.json` at stop.
@@ -342,11 +342,11 @@ terrific-cli/
   docs/
 ```
 
-Rules: `core` imports nothing else. `store` and `recorder` know nothing about HTTP. `cli` and `tui` only reach the daemon through `client`, plus reading files whose paths the daemon returned. No singletons with side effects on import; the daemon builds its services at startup and passes them in. The `/new` parser lives in `core` so the TUI assistant and `terrific-cli start` share it, including its messages.
+Rules: `core` imports nothing else. `store` and `recorder` know nothing about HTTP. `cli` and `tui` only reach the daemon through `client`, plus reading files whose paths the daemon returned. No singletons with side effects on import; the daemon builds its services at startup and passes them in. The `/new` parser lives in `core` so the TUI assistant and `terrific start` share it, including its messages.
 
 - **Daemon.** One per machine, bound to `127.0.0.1`, token in `Documents/.terrific/token` for every route except `/ingest/*`. Default port 4569, so it can run next to the current terrific backend on 4568 during the transition. Live events go out over Server-Sent Events, which `events --follow`, `ingest tail --follow` and the TUI consume.
 - **Restart behavior.** On startup the daemon marks sessions that were recording as `interrupted`. Endpoints keep their state and URL; the 24 h idle clock continues from `lastEventAt`.
-- **Browser profiles.** A profile is `{ browser, executablePath, userDataDir, profileDirectory, slug }`, launched as a persistent context with a dynamic viewport. `terrific-cli profiles` lists what it finds on the machine and marks the ones it cannot use, with the reason. See R2.
+- **Browser profiles.** A profile is `{ browser, executablePath, userDataDir, profileDirectory, slug }`, launched as a persistent context with a dynamic viewport. `terrific profiles` lists what it finds on the machine and marks the ones it cannot use, with the reason. See R2.
 
 ## 9. TUI technology
 

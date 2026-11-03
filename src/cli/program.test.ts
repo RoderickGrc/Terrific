@@ -63,8 +63,8 @@ function captureIo(
 }
 
 async function setup() {
-  const dataRoot = await tempDir('terrific-cli-home-');
-  const cwd = await tempDir('terrific-cli-cwd-');
+  const dataRoot = await tempDir('terrific-home-');
+  const cwd = await tempDir('terrific-cwd-');
   const handle = await startDaemon({
     dataRoot,
     port: 0,
@@ -82,7 +82,7 @@ async function setup() {
 }
 
 function argv(...args: string[]): string[] {
-  return ['node', 'terrific-cli', ...args];
+  return ['node', 'terrific', ...args];
 }
 
 test('ingest up is idempotent and --json includes url', async () => {

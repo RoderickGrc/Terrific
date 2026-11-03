@@ -6,7 +6,7 @@ test('startArgvTokens drops the command name and --json only', () => {
   deepEqual(
     startArgvTokens([
       'node',
-      'terrific-cli',
+      'terrific',
       'start',
       'localhost:5173',
       'x y',
@@ -17,5 +17,5 @@ test('startArgvTokens drops the command name and --json only', () => {
     ]),
     ['localhost:5173', 'x y', '@clean', '#app', '--no-console'],
   );
-  deepEqual(startArgvTokens(['node', 'terrific-cli', '--json', 'start', '@nope']), ['@nope']);
+  deepEqual(startArgvTokens(['node', 'terrific', '--json', 'start', '@nope']), ['@nope']);
 });

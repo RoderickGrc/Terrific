@@ -99,7 +99,7 @@ export type DaemonClient = {
   shutdown(): Promise<OkResponse>;
 };
 
-const UNREACHABLE = 'Cannot reach the terrific-cli daemon.';
+const UNREACHABLE = 'Cannot reach the terrific daemon.';
 
 function isApiError(value: unknown): value is { error: { code: string; message: string } } {
   return (

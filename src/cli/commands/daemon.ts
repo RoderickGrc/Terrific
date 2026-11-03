@@ -27,7 +27,7 @@ async function fileGone(path: string, ms: number): Promise<void> {
 }
 
 export function registerDaemonCommand(program: Command, io: CliIo): void {
-  const daemon = program.command('daemon').description('Manage the terrific-cli daemon');
+  const daemon = program.command('daemon').description('Manage the terrific daemon');
 
   addJsonOption(
     daemon.command('start').description('Start the daemon if it is not running'),
