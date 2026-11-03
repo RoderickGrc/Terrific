@@ -121,7 +121,7 @@ For backend work, scripts, or anything that is not a web page. The session recor
 | `/new …` | home, summary | Parse the line, then confirm (see above) |
 | `/sessions [search]` | home, summary | Session picker. Alias `/resume` |
 | `/ingest` | all | Ingest endpoints of the project (see below) |
-| `/attach` | home, summary | Return to the session recording in the background |
+| `/attach` | home, summary | Return to the session recording in the background, including one started elsewhere (`terrific start` in a shell or by an agent), which home and summary pick up within 5 s with a notice |
 | `/profiles` (`/profile`, `/model`), `/record` | home, summary | Manage browser profiles and pick the one `/new` starts from; choose what `/new` records |
 | `/note <text>` | live | Same as typing plain text |
 | `/bug [text]` | live | Same as Ctrl+Enter |
@@ -147,7 +147,7 @@ Typing `/` opens a palette filtered as you type, matching names and aliases. Arr
 - The selected row gets a lavender bar `▌` and a darker row.
 - On wide terminals, a preview pane: id, date, duration, event counts colored by type, errors, endpoints, the first bugs and flags, and whether it is legacy.
 
-Keys: Enter opens the summary, Ctrl+F pins, Ctrl+R renames in place, Ctrl+D deletes after a second Ctrl+D, Esc closes. Legacy sessions can be opened and pinned; rename and delete refuse them.
+Keys: Enter opens the summary, or the live log of a session that is recording, Ctrl+F pins, Ctrl+R renames in place, Ctrl+D deletes after a second Ctrl+D, Esc closes. Legacy sessions can be opened and pinned; rename and delete refuse them.
 
 ### Profiles panel
 

@@ -95,7 +95,7 @@ export function mountTui(
   terminal: Terminal,
   client: DaemonClient,
   initial: InitialData,
-  options: { color: boolean },
+  options: { color: boolean; refreshMs?: number | undefined },
 ): MountedTui {
   const tui = new TuiAltScreen(terminal, false);
   let finish: () => void = () => undefined;
@@ -109,6 +109,7 @@ export function mountTui(
       rows: () => terminal.rows,
       requestRender: () => tui.requestRender(),
       copy: (text) => copyText(terminal, text),
+      refreshMs: options.refreshMs,
       quit: () => {
         app.dispose();
         tui.stop();

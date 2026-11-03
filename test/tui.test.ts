@@ -37,12 +37,13 @@ async function open(
   columns = 110,
   rows = 34,
   prepare?: (fake: FakeDaemon) => Promise<void>,
+  refreshMs?: number,
 ): Promise<Harness> {
   const fake = createFakeDaemon();
   await prepare?.(fake);
   const term = new VirtualTerminal(columns, rows);
   const initial = await loadInitial(fake.client, PROJECT.cwd, '/data');
-  const tui = mountTui(term, fake.client, initial, { color: false });
+  const tui = mountTui(term, fake.client, initial, { color: false, refreshMs });
   const type = (text: string): void => {
     for (const ch of text) term.send(ch);
   };
@@ -424,6 +425,40 @@ describe('tui', () => {
     const text = await h.term.text();
     match(text, /@treecloud-rod is not available anymore\. \/new now uses @clean/);
     match(text, /\/new starts from: browser · Clean browser \(@clean\)/);
+    await quit(h);
+  });
+
+  test('a session started elsewhere is picked up without a restart', async () => {
+    const h = await open(110, 34, undefined, 50);
+    let text = await h.term.text();
+    match(text, /no session/);
+    const setup = { ...(await h.fake.client.getSettings(PROJECT.id)).lastSetup };
+    // Another process, such as `terrific start` in a shell or an agent.
+    const view = await h.fake.client.startSession(PROJECT.id, { setup, name: 'from agent' });
+    text = await screenWith(h, /from agent is recording\. \/attach to watch it/);
+    match(text, /from agent is recording\. \/attach to watch it/);
+    match(text, /● REC/);
+    h.type('/attach');
+    h.term.send(ENTER);
+    h.fake.emit(view.id, { kind: 'console', level: 'log', text: 'hello from elsewhere' }, 1500);
+    text = await screenWith(h, /hello from elsewhere/);
+    match(text, /hello from elsewhere/);
+    await quit(h);
+  });
+
+  test('Enter on a recording session in /sessions opens its live log', async () => {
+    // The default refresh is 5 s, so the TUI has not picked the session up by itself yet.
+    const h = await open(110, 34);
+    const setup = { ...(await h.fake.client.getSettings(PROJECT.id)).lastSetup };
+    const view = await h.fake.client.startSession(PROJECT.id, { setup, name: 'agent run' });
+    h.type('/sessions agent run');
+    h.term.send(ENTER);
+    await screenWith(h, /agent run/);
+    h.term.send(ENTER);
+    h.fake.emit(view.id, { kind: 'console', level: 'log', text: 'live line' }, 1500);
+    const text = await screenWith(h, /live line/);
+    match(text, /live line/);
+    match(text, /● REC/);
     await quit(h);
   });
 

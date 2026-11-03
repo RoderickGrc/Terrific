@@ -5,6 +5,7 @@ import {
   MAX_EVENT_LIMIT,
   type ProjectSettingsView,
   type SessionDetail,
+  type SessionListItem,
   type SessionView,
   type SettingsPatchRequest,
 } from '../core/api.ts';
@@ -85,6 +86,8 @@ export type AppDeps = {
   requestRender(): void;
   copy(text: string): Promise<boolean>;
   quit(): void;
+  /** How often home and the panels pick up changes made by other processes; tests shorten it. */
+  refreshMs?: number | undefined;
 };
 
 export type AppData = Pick<
@@ -153,6 +156,7 @@ export class TuiApp implements Component, Focusable {
   private toastTimer: ReturnType<typeof setTimeout> | undefined;
   private ticker: ReturnType<typeof setInterval> | undefined;
   private refresher: ReturnType<typeof setInterval> | undefined;
+  private readonly ended = new Set<string>();
   private sessionStream: AbortController | undefined;
   private endpointStream: AbortController | undefined;
 
@@ -183,21 +187,30 @@ export class TuiApp implements Component, Focusable {
       this.deps.requestRender();
     }, 1000);
     this.refresher = setInterval(() => {
-      const panel = this.state.overlay?.type;
-      if (this.state.screen !== 'home' && panel !== 'ingest' && panel !== 'profiles') return;
+      const state = this.state;
+      const panel = state.overlay?.type;
+      if (state.screen === 'live' && panel !== 'ingest' && panel !== 'profiles') return;
       const { client } = this.deps;
-      // Profiles too, so ones added with `terrific profiles add` show up without a restart.
-      Promise.all([client.listEndpoints(this.state.project.id), client.listProfiles()])
-        .then(([endpoints, profiles]) => {
-          this.state.endpoints = endpoints;
-          this.state.profiles = profiles;
+      const id = state.project.id;
+      // Everything another process may change: `terrific start` in a shell or an agent, `terrific profiles add`, endpoints.
+      Promise.all([
+        client.listEndpoints(id),
+        client.listProfiles(),
+        client.listSessions(id),
+        client.status(),
+      ])
+        .then(([endpoints, profiles, sessions, status]) => {
+          state.endpoints = endpoints;
+          state.profiles = profiles;
+          this.replaceSessions(sessions);
+          this.adoptRunning(status.sessions);
           return this.ensureDefaultProfile();
         })
         .then(() => {
           this.deps.requestRender();
         })
         .catch(() => undefined);
-    }, REFRESH_MS);
+    }, this.deps.refreshMs ?? REFRESH_MS);
   }
 
   dispose(): void {
@@ -536,6 +549,35 @@ export class TuiApp implements Component, Focusable {
     this.state.sessions = sessions;
   }
 
+  /** Keeps the `/sessions` selection on the same session when the list changes under it. */
+  private replaceSessions(sessions: SessionListItem[]): void {
+    const state = this.state;
+    const overlay = state.overlay;
+    const selected =
+      overlay?.type === 'sessions'
+        ? sessionRows(state, overlay.query)[overlay.index]?.item.id
+        : undefined;
+    state.sessions = sessions;
+    if (overlay?.type !== 'sessions' || selected === undefined) return;
+    const at = sessionRows(state, overlay.query).findIndex((row) => row.item.id === selected);
+    if (at >= 0) overlay.index = at;
+  }
+
+  /** Follows a session of this project that another process started, like the TUI does at launch. */
+  private adoptRunning(running: readonly SessionView[]): void {
+    const state = this.state;
+    if (state.live !== null) return;
+    const session = running.find(
+      (item) =>
+        item.projectId === state.project.id &&
+        item.status === 'recording' &&
+        !this.ended.has(item.id),
+    );
+    if (session === undefined) return;
+    this.attach(session, false);
+    this.toast('info', `${session.name ?? session.id} is recording. /attach to watch it`);
+  }
+
   private attach(session: SessionView, show: boolean): void {
     const state = this.state;
     state.live = { session, log: new LiveLog(), selected: null, scroll: 0, unseen: 0 };
@@ -586,6 +628,8 @@ export class TuiApp implements Component, Focusable {
     const live = state.live;
     if (live === null || live.session.id !== sessionId) return;
     state.live = null;
+    // The daemon still lists it as recording for a moment after the stop event.
+    this.ended.add(sessionId);
     this.sessionStream?.abort();
     const watching = state.screen === 'live';
     if (state.overlay?.type === 'stop') this.closeOverlay();
@@ -1202,6 +1246,12 @@ export class TuiApp implements Component, Focusable {
       if (state.live?.session.id === item.id && this.recording()) {
         this.closeOverlay();
         this.execute('attach', '');
+      } else if (item.status === 'recording' && !item.legacy) {
+        // Started elsewhere and not followed yet: open its live log, not a summary.
+        this.closeOverlay();
+        this.run(async () => {
+          this.attach(await this.deps.client.getSession(item.id), true);
+        });
       } else {
         this.openSummary(item.id);
       }

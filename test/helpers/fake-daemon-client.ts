@@ -306,6 +306,11 @@ export function createFakeDaemon(): FakeDaemon {
       };
       views.set(id, view);
       events.set(id, []);
+      // Like the daemon: a recording session is listed too.
+      sessions = [
+        { ...listItem(id, body.name, 0, 0), status: 'recording', stoppedAt: null },
+        ...sessions,
+      ];
       emit(id, { kind: 'lifecycle', state: 'started' }, 0);
       return view;
     },
@@ -325,7 +330,10 @@ export function createFakeDaemon(): FakeDaemon {
       };
       views.set(id, stopped);
       contexts.add(id);
-      sessions = [{ ...listItem(id, stopped.name, 0, 0), status: 'stopped' }, ...sessions];
+      sessions = [
+        { ...listItem(id, stopped.name, 0, 0), status: 'stopped' },
+        ...sessions.filter((item) => item.id !== id),
+      ];
       return stopped;
     },
     addMark: async (id, body) => {
