@@ -1,0 +1,44 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Recorder fixture</title>
+  </head>
+  <body>
+    <h1>Recorder fixture</h1>
+    <form id="signup">
+      <label for="email">Email</label>
+      <input id="email" name="email" type="email" />
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" />
+      <label for="color">Color</label>
+      <select id="color" name="color">
+        <option value="">Pick</option>
+        <option value="blue">Blue</option>
+        <option value="red">Red</option>
+      </select>
+      <label>
+        <input id="agree" name="agree" type="checkbox" />
+        Agree
+      </label>
+      <button id="submit" type="submit">Save</button>
+    </form>
+    <button id="missing" type="button">Missing</button>
+    <button id="fail" type="button">Fail</button>
+    <a id="next" href="page2.html">Page two</a>
+    <script>
+      console.warn('fixture warn');
+      console.error('fixture error');
+      document.getElementById('signup').addEventListener('submit', (event) => {
+        event.preventDefault();
+        fetch('/api/ok', { method: 'POST', body: JSON.stringify({ a: 1 }) });
+      });
+      document.getElementById('missing').addEventListener('click', () => {
+        fetch('/api/missing');
+      });
+      document.getElementById('fail').addEventListener('click', () => {
+        fetch('http://127.0.0.1:9/never');
+      });
+    </script>
+  </body>
+</html>
