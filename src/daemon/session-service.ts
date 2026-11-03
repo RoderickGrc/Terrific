@@ -40,6 +40,13 @@ export type SessionService = {
   onIngest(projectId: string, name: string, event: IngestEvent): Promise<void>;
   recoverInterrupted(): Promise<void>;
   stopAll(): Promise<void>;
+  findLive(id: string): {
+    record: LiveSession['record'];
+    project: LiveSession['project'];
+    store: SessionStore;
+  } | null;
+  applyRecord(id: string, record: LiveSession['record']): void;
+  isRecording(id: string): boolean;
 };
 
 export function createSessionService(options: {
@@ -252,6 +259,26 @@ export function createSessionService(options: {
     for (const id of [...lives.keys()]) await stop(id);
   }
 
+  function findLive(id: string): {
+    record: LiveSession['record'];
+    project: LiveSession['project'];
+    store: SessionStore;
+  } | null {
+    const live = lives.get(id);
+    if (live === undefined) return null;
+    return { record: live.record, project: live.project, store: live.store };
+  }
+
+  function applyRecord(id: string, record: LiveSession['record']): void {
+    const live = lives.get(id);
+    if (live !== undefined) live.record = record;
+  }
+
+  function isRecording(id: string): boolean {
+    const live = lives.get(id);
+    return live !== undefined && live.record.status === 'recording' && !live.finishing;
+  }
+
   return {
     start,
     stop,
@@ -264,5 +291,8 @@ export function createSessionService(options: {
     onIngest,
     recoverInterrupted,
     stopAll,
+    findLive,
+    applyRecord,
+    isRecording,
   };
 }

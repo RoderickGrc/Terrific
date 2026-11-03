@@ -28,6 +28,7 @@ export type IngestService = {
   tail(projectId: string, name: string, limit: number): Promise<TerrificEvent[]>;
   receive(token: string, body: unknown): Promise<void>;
   closeIdle(): Promise<void>;
+  findByToken(token: string): Promise<EndpointView | null>;
 };
 
 type EndpointStore = ReturnType<typeof createEndpointStore>;
@@ -187,5 +188,11 @@ export async function createIngestService(options: {
     }
   }
 
-  return { up, down, rename, remove, list, get, tail, receive, closeIdle };
+  async function findByToken(token: string): Promise<EndpointView | null> {
+    const ref = tokens.get(token);
+    if (ref === undefined) return null;
+    return get(ref.projectId, ref.name);
+  }
+
+  return { up, down, rename, remove, list, get, tail, receive, closeIdle, findByToken };
 }

@@ -13,7 +13,9 @@ import { createIngestService, type IngestHooks, type IngestService } from './ing
 import { defaultResolveBrowser } from './resolve-browser.ts';
 import { registerCoreRoutes } from './routes-core.ts';
 import { registerIngestRoutes } from './routes-ingest.ts';
+import { registerReadingRoutes } from './routes-reading.ts';
 import { registerSessionRoutes } from './routes-sessions.ts';
+import { createSessionCatalog } from './session-catalog.ts';
 import { createSessionService, type SessionService } from './session-service.ts';
 import { createStreamHub, type StreamHub } from './stream-hub.ts';
 
@@ -199,6 +201,20 @@ export async function startDaemon(options: StartDaemonOptions): Promise<DaemonHa
     pid: process.pid,
     getPort: () => runtime.port,
     startedAt,
+  });
+  const catalog = createSessionCatalog({
+    dataRoot: options.dataRoot,
+    projects,
+    sessions,
+    now: options.now,
+    random: options.random,
+  });
+  registerReadingRoutes(router, {
+    catalog,
+    sessions,
+    ingest,
+    projects,
+    now: options.now,
   });
   await sessions.recoverInterrupted();
   const server = createServer((req, res) => {

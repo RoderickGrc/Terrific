@@ -1,7 +1,7 @@
 import { writeFile } from 'node:fs/promises';
 import type { SessionView } from '../core/api.ts';
 import { renderContext } from '../core/context-export.ts';
-import { isTerrificError, TerrificError } from '../core/errors.ts';
+import { TerrificError } from '../core/errors.ts';
 import type { EventInput, IngestEvent, LifecycleEvent, TerrificEvent } from '../core/events.ts';
 import { newEventId, type RandomSource } from '../core/ids.ts';
 import type { SessionRecord } from '../core/session.ts';
@@ -114,11 +114,7 @@ export async function sessionView(
   const paths = store.paths(record.id);
   let endpoint = null;
   if (record.endpoint !== null) {
-    try {
-      endpoint = await ingest.get(project.id, record.endpoint.name);
-    } catch (error) {
-      if (!isTerrificError(error) || error.code !== 'NOT_FOUND') throw error;
-    }
+    endpoint = await ingest.findByToken(record.endpoint.token);
   }
   return {
     id: record.id,
