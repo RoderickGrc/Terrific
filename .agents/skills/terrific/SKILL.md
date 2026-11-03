@@ -69,6 +69,10 @@ Not every check needs a session. An open endpoint stores events with no session 
 
 Use a session when the evidence has to be saved with marks or a browser timeline, or compared before and after a fix.
 
+## Production
+
+When the bug only happens in production, do not instrument or deploy anything. Record the production page and add a console probe the user pastes: [references/production.md](references/production.md).
+
 ## Final answer
 
 Give:
