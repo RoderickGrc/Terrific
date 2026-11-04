@@ -1,27 +1,13 @@
-import { formatDuration } from '../../core/format.ts';
-import { ago, clock, parseTime, shortDate } from '../format.ts';
+import { ago, clock, parseTime } from '../format.ts';
 import { blank, type Line, line } from '../layout.ts';
 import { keyHint, plural, type View } from './common.ts';
 import { elapsed } from './header.ts';
 
-const RECENT = 7;
-
+/** Home keeps the focus on what is recording now; stopped and legacy sessions live in `/sessions`. */
 export function homeLines(view: View): Line[] {
   const { theme, state } = view;
   const p = theme.paint;
   const out: Line[] = [];
-
-  const live = state.live;
-  if (live !== null && live.session.status === 'recording') {
-    const s = live.session;
-    out.push(
-      line(
-        `  ${p('●', { tone: 'err', bold: true })} ${p('Recording in the background', 'fg1')}  ${p(s.name ?? 'untitled', { tone: 'fg1', bold: true })}  ${p(clock(elapsed(state, s.startedAt)), 'fg2')}`,
-        `${keyHint(theme, '/attach', 'open it')}  `,
-      ),
-      blank(),
-    );
-  }
 
   if (state.endpoints.length > 0) {
     const parts = state.endpoints.map((ep) => {
@@ -41,32 +27,65 @@ export function homeLines(view: View): Line[] {
 
   out.push(
     line(
-      ` ${p('Recent sessions', { tone: 'fg1', bold: true })}  ${p('in this project', 'fg3')}`,
+      ` ${p('Recording', { tone: 'fg1', bold: true })}  ${p('in this project', 'fg3')}`,
       `${keyHint(theme, '/sessions', 'all')}  `,
     ),
     blank(),
   );
-  const recent = state.sessions.slice(0, RECENT);
-  if (recent.length === 0) {
-    out.push(line(`   ${p('No sessions yet.', 'fg3')} ${keyHint(theme, '/new', 'starts one')}`));
+  const attached = state.live?.session.status === 'recording' ? state.live.session : null;
+  const recording = state.sessions.filter((item) => item.status === 'recording');
+  const rows: Row[] = recording.map((item) => ({
+    id: item.id,
+    name: item.name,
+    startedAt: item.startedAt,
+    total: item.total,
+    bugs: item.bugs,
+    errors: item.errors,
+  }));
+  // A session started from here can show up before the list refreshes.
+  if (attached !== null && !rows.some((row) => row.id === attached.id)) {
+    rows.unshift({
+      id: attached.id,
+      name: attached.name,
+      startedAt: attached.startedAt,
+      total: null,
+      bugs: 0,
+      errors: 0,
+    });
   }
-  for (const item of recent) {
-    const started = parseTime(item.startedAt) ?? 0;
-    const name = item.name === null ? p('untitled', 'fg3') : p(item.name, 'fg1');
-    const live = item.status === 'recording' ? `  ${p('● recording', 'err')}` : '';
+  if (rows.length === 0) {
+    out.push(line(`   ${p('Nothing recording.', 'fg3')} ${keyHint(theme, '/new', 'starts one')}`));
+  }
+  for (const row of rows) {
+    const name =
+      row.name === null ? p('untitled', 'fg3') : p(row.name, { tone: 'fg1', bold: true });
+    const open = row.id === attached?.id ? `  ${keyHint(theme, '/attach', 'open it')}` : '';
     const right = [
-      p(shortDate(started).padEnd(7), 'fg2'),
-      p(formatDuration(item.durationMs).padStart(7), 'fg3'),
+      p(clock(elapsed(state, row.startedAt)).padStart(8), 'fg2'),
       ' ',
-      p(`${String(item.total).padStart(4)} events`, 'fg2'),
+      p(row.total === null ? ''.padEnd(11) : `${String(row.total).padStart(4)} events`, 'fg2'),
       ' ',
-      p((item.bugs > 0 ? plural(item.bugs, 'bug') : '').padEnd(7), item.bugs > 0 ? 'bug' : 'fg3'),
+      p((row.bugs > 0 ? plural(row.bugs, 'bug') : '').padEnd(7), row.bugs > 0 ? 'bug' : 'fg3'),
       p(
-        (item.errors > 0 ? plural(item.errors, 'error') : '').padEnd(9),
-        item.errors > 0 ? 'failure' : 'fg3',
+        (row.errors > 0 ? plural(row.errors, 'error') : '').padEnd(9),
+        row.errors > 0 ? 'failure' : 'fg3',
       ),
     ].join(' ');
-    out.push(line(`   ${name}  ${p(item.id, 'fg3')}${live}`, `${right} `));
+    out.push(
+      line(
+        `   ${p('●', { tone: 'err', bold: true })} ${name}  ${p(row.id, 'fg3')}${open}`,
+        `${right} `,
+      ),
+    );
   }
   return out;
+}
+
+interface Row {
+  id: string;
+  name: string | null;
+  startedAt: string;
+  total: number | null;
+  bugs: number;
+  errors: number;
 }

@@ -89,7 +89,7 @@ describe('tui', () => {
   });
 
   for (const { columns, rows } of SIZES) {
-    test(`home shows the project, its endpoints and recent sessions at ${columns}x${rows}`, async () => {
+    test(`home shows the project, its endpoints and only what is recording at ${columns}x${rows}`, async () => {
       const h = await open(columns, rows);
       const lines = await h.term.lines();
       match(lines[0] ?? '', /^ Terrific {2}acme-shop .*no session $/);
@@ -97,8 +97,9 @@ describe('tui', () => {
       const text = lines.join('\n');
       match(text, /Ingest {3}● app 3 events/);
       match(text, /○ worker closed/);
-      match(text, /checkout flow {2}s-checkout/);
-      match(text, /2 bugs/);
+      match(text, /Recording {2}in this project/);
+      match(text, /Nothing recording\. \/new starts one/);
+      ok(!text.includes('s-checkout'), 'stopped sessions stay in /sessions');
       match(text, /Type a command\. \/new starts a session/);
       equal((lines[rows - 2] ?? '').trim(), '');
       await quit(h);
@@ -178,7 +179,7 @@ describe('tui', () => {
     match(text, /Enter starts now: records without a browser, linked to ingest app/);
     h.term.send(ESC);
     text = await h.term.text();
-    match(text, /Recent sessions/);
+    match(text, /Recording {2}in this project/);
     await quit(h);
   });
 
@@ -260,7 +261,7 @@ describe('tui', () => {
     match(text, /Same setup: \/new localhost:5173 @clean #app/);
     h.term.send(ESC);
     text = await h.term.text();
-    match(text, /Recent sessions/);
+    match(text, /Recording {2}in this project/);
     await quit(h);
   });
 
@@ -438,6 +439,8 @@ describe('tui', () => {
     text = await screenWith(h, /from agent is recording\. \/attach to watch it/);
     match(text, /from agent is recording\. \/attach to watch it/);
     match(text, /● REC/);
+    match(text, /● from agent {2}s-new-1 {2}\/attach open it/);
+    ok(!text.includes('s-checkout'), 'stopped sessions stay off home');
     h.type('/attach');
     h.term.send(ENTER);
     h.fake.emit(view.id, { kind: 'console', level: 'log', text: 'hello from elsewhere' }, 1500);

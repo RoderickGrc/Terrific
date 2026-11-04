@@ -15,7 +15,7 @@ terrific-cli is a clean rewrite of Terrific as a separate project. It becomes th
 | Project id | Short 8-character id, the same format terrific already uses for workspaces; the id terrific already gave a directory is reused |
 | Legacy sessions | Read in place, never moved |
 | terrific web | Keeps its current storage for now |
-| Start screen | Command-first: project header, open ingest endpoints, recent sessions, a command input |
+| Start screen | Command-first: project header, open ingest endpoints, the sessions recording in this project, a command input |
 | Starting a session | `/new` with optional arguments (URL, name, `@profile`, `#endpoint`, `--flags`), parsed live while typing; always followed by a confirmation panel |
 | Session targets | Browser (URL optional) or no browser (notes, bugs, flags and ingest only) |
 | Video | Not recorded. terrific-cli has no video and no whole-screen mode |
@@ -57,7 +57,7 @@ These come from the design reviews and apply to every screen and to the non-inte
 
 ### Screens
 
-- **Home.** Header with project path and store path, a line with the project's ingest endpoints (open ones with event count and last activity), recent sessions of this project, and a command input. The status line shows what `/new` starts from.
+- **Home.** Header with project path and store path, a line with the project's ingest endpoints (open ones with event count and last activity), the sessions of this project that are recording (elapsed time, events, bugs, errors; the attached one shows `/attach`), and a command input. Stopped and legacy sessions are only in `/sessions`, so home keeps the focus on what is running. The status line shows what `/new` starts from.
 - **`/new` assistant.** While the input holds `/new …`, a panel above it shows how the line is being read (see below).
 - **Confirmation.** One row per field, filled from the parsed line and the last setup: Name (optional, focused first so typing names the session), Target (Browser or No browser), URL (optional, blank opens an empty tab), Profile, Record (actions, network, console) and Ingest (a single choice: none or one endpoint of the project). Without a browser, only Name, Target and Ingest remain. The last line says in plain words what Enter will start.
 - **Live.** Header with session name, profile (or "No browser") and its ingest endpoint, then the current URL or the ingest `POST` URL. The log streams one line per event. The input saves notes; Ctrl+Enter and Ctrl+Shift+Enter mark a bug or a flag with or without text; F5 and F6 capture. The status line shows running counts and which event types are hidden.
