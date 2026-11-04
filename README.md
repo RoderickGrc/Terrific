@@ -89,7 +89,7 @@ The demo uses a fictional ticket checkout. Both the browser session and the Clau
 
 ## Debugging with an agent
 
-Terrific includes a skill that teaches coding agents to instrument a suspected code path, collect evidence, investigate the recording, and verify a fix in a new session.
+Terrific includes a skill that teaches coding agents to instrument a suspected code path, collect evidence, investigate the recording, and verify a fix in a new session. The same skill covers validation: measuring whether a known behavior holds, such as latency or streaming output, against criteria fixed before the run.
 
 ![Claude Code receiving a checkout bug report and loading the Terrific skill](docs/assets/claude-start.png)
 
@@ -105,7 +105,7 @@ The default destination is `.agents/skills/terrific`. For clients that use anoth
 terrific skill install ~/.claude/skills/terrific
 ```
 
-Installation refuses to overwrite an existing directory. See the bundled [agent skill](.agents/skills/terrific/SKILL.md) for the full workflow and telemetry examples.
+Installation refuses to overwrite an existing directory. To update an installed skill after upgrading Terrific, add `--force`, which replaces it only when the destination already holds the Terrific skill. See the bundled [agent skill](.agents/skills/terrific/SKILL.md) for the full workflow and telemetry examples.
 
 ### Bring application logs into the timeline
 

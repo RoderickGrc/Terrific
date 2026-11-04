@@ -1,13 +1,13 @@
 ---
 name: terrific
-description: Debug with runtime evidence through the terrific CLI. Ingest endpoints receive temporary telemetry from instrumented code. Sessions record it, with or without a browser that a person drives. Saved events and context are read back after the session stops. Use when debugging a bug, adding temporary instrumentation, testing a web app with the user, or when the user mentions terrific, a terrific session, or an ingest endpoint.
+description: Debug and validate with runtime evidence through the terrific CLI. Ingest endpoints receive temporary telemetry from instrumented code. Sessions record it, with or without a browser that a person drives. Saved events and context are read back after the session stops. Use when debugging a bug, validating or measuring runtime behavior (latency, streaming, ordering, what a process emits), adding temporary instrumentation, testing a web app with the user, or when the user mentions terrific, a terrific session, or an ingest endpoint.
 ---
 
 # terrific
 
 terrific records debugging sessions on this machine. A browser session captures what a person does in a real browser (actions, network, console, navigation). It also captures the events instrumented code posts to the session's ingest endpoint. A session without a browser captures only the endpoint and the marks, for backends, scripts, tests and workers. Evidence is saved when the session stops and is read back with the CLI.
 
-Debug with that evidence. Do not claim a root cause without it.
+Debug and validate with that evidence. Do not claim a root cause, or that a behavior holds, without it.
 
 ## Basics
 
@@ -17,7 +17,16 @@ Debug with that evidence. Do not claim a root cause without it.
 - `terrific status` shows running sessions and open endpoints. `terrific sessions` lists this project's sessions.
 - The data root holds secrets. Never read or print `token`, `credentials.json`, or a profile's `state.json` there.
 
-## Workflow
+## Debug or validate
+
+Both flows use the same endpoints, instrumentation, sessions and evidence. They differ in the question and the verdict.
+
+- **Debug** when something is wrong and the cause is unknown ("it fails", "why does it"). Diagnostics are hypotheses, rated CONFIRMED or REJECTED, and the evidence drives a fix. Follow the debug workflow below.
+- **Validate** when the expected behavior is known and the task is to show whether it holds, or to measure it ("check that", "make sure", "measure"). Diagnostics are expected to pass, rated PASS or FAIL against a criterion fixed beforehand. Follow [references/validation.md](references/validation.md).
+
+A validation that fails with no evident cause becomes a debug task, and its session is the failing session.
+
+## Debug workflow
 
 1. Understand the symptom: expected behavior, actual behavior, and how to reproduce it. Read the relevant code before editing.
 2. Write 3-5 diagnostics. Give each a stable slug (`stale-client-state`, `request-url-mismatch`) and say what runtime evidence would confirm or reject it.
@@ -32,6 +41,7 @@ Debug with that evidence. Do not claim a root cause without it.
    - Wrap the code in a marked region so it is easy to remove.
    - Reuse an existing logger or helper if it can post asynchronously.
    - Payload, snippets and safety rules: [references/telemetry.md](references/telemetry.md).
+   - Run the instrumented code once and check with `terrific ingest tail checkout-v2` that every point posts, before starting a session.
 5. Start a session linked to the endpoint. Always state the target, because a bare `terrific start` repeats the last setup.
    - **Browser**, when UI, navigation, network or console matters: `terrific start localhost:5173 "checkout total" #checkout-v2`. A person drives the window. Add `@profile` to start logged in ([references/profiles.md](references/profiles.md)).
    - **No browser**, for server, script, test, worker or CLI flows: `terrific start "payment webhook" #checkout-v2 --no-browser`.
@@ -75,7 +85,7 @@ When the bug only happens in production, do not instrument or deploy anything. B
 
 ## Final answer
 
-Give:
+For a validation, use the final answer in [references/validation.md](references/validation.md). For debugging, give:
 
 - the root cause in 1-3 sentences;
 - evidence from the failing and the verification sessions, with ids and event times;

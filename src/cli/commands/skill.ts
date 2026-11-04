@@ -1,4 +1,4 @@
-import { cp, mkdir, stat } from 'node:fs/promises';
+import { cp, mkdir, readFile, rm, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Command } from 'commander';
@@ -20,27 +20,58 @@ async function skillSource(): Promise<string> {
   }
 }
 
+async function isTerrificSkill(dir: string): Promise<boolean> {
+  try {
+    const text = await readFile(join(dir, 'SKILL.md'), 'utf8');
+    return /^---\r?\n(?:.*\r?\n)*?name:\s*terrific\s*\r?\n/.test(text);
+  } catch {
+    return false;
+  }
+}
+
+async function exists(path: string): Promise<boolean> {
+  try {
+    await stat(path);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 export function registerSkillCommand(program: Command, io: CliIo): void {
   program
     .command('skill')
     .description('Install the agent skill with terrific skill install [path]')
     .command('install [path]')
     .description('Install the skill into a directory (default: .agents/skills/terrific)')
-    .action(async (path: string | undefined) => {
+    .option('--force', 'Replace an existing Terrific skill at the destination')
+    .action(async (path: string | undefined, options: { force?: boolean }) => {
       const source = await skillSource();
       const destination = resolve(io.cwd, path ?? '.agents/skills/terrific');
+      if (resolve(source) === destination) {
+        throw new Error(`Destination is the bundled skill itself: ${destination}.`);
+      }
+      const replacing = options.force === true && (await exists(destination));
+      if (replacing) {
+        if (!(await isTerrificSkill(destination))) {
+          throw new Error(
+            `Destination is not a Terrific skill: ${destination}. --force only replaces a directory whose SKILL.md is named terrific.`,
+          );
+        }
+        await rm(destination, { recursive: true, force: true });
+      }
       await mkdir(dirname(destination), { recursive: true });
       try {
         await mkdir(destination);
       } catch (error) {
         if ((error as NodeJS.ErrnoException).code === 'EEXIST') {
           throw new Error(
-            `Destination already exists: ${destination}. Choose another path or remove it first.`,
+            `Destination already exists: ${destination}. Pass --force to replace it, or choose another path.`,
           );
         }
         throw error;
       }
       await cp(source, destination, { recursive: true, errorOnExist: true, force: false });
-      printLine(io, `Skill installed at ${destination}`);
+      printLine(io, `Skill ${replacing ? 'replaced' : 'installed'} at ${destination}`);
     });
 }
