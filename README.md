@@ -20,13 +20,13 @@ Use the interactive terminal UI while testing, or the CLI from an agent, script,
 
 Start a recording, reproduce a failed checkout, mark the bug, and prepare the evidence for an agent.
 
-https://github.com/user-attachments/assets/0d3e2903-de28-4684-8304-6d065e3fd598
+https://github.com/user-attachments/assets/c9e8621c-91be-44bd-8164-4e57af562411
 
 ### Investigate with Claude Code
 
 Follow Claude Code as it investigates a checkout that shows $76.80 but charges $84.00, using Terrific to collect runtime evidence.
 
-https://github.com/user-attachments/assets/c9e8621c-91be-44bd-8164-4e57af562411
+https://github.com/user-attachments/assets/0d3e2903-de28-4684-8304-6d065e3fd598
 
 ## Getting started
 
