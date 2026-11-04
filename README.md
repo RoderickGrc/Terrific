@@ -196,3 +196,7 @@ Read [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [SECURIT
 ## License
 
 [MIT](LICENSE) © Rodrigo Garciaguirre.
+
+---
+
+By [Rodrigo Garciaguirre](https://rod.run) · [Portfolio](https://rod.run) · [haiku.ac](https://haiku.ac)
