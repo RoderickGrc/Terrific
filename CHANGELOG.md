@@ -20,3 +20,4 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - The TUI picks up sessions started elsewhere in the same project (`terrific start` in a shell or by an agent) within 5 s, and Enter in `/sessions` on a recording session opens its live log
 - Fixed: parallel posts to an ingest endpoint could share a `seq`, lose `eventCount` updates, or answer 500 and drop the event on Windows; endpoint writes are now serialized per project and JSON files are replaced without deleting them first
 - TUI home lists only the sessions recording in this project, with elapsed time, events, bugs and errors; stopped and legacy sessions are in `/sessions`
+- Fixed: the TUI `/sessions` picker listed the global legacy store of terrific-web, which has no project link; it now lists only this project's sessions, as `terrific sessions` does (`terrific sessions --legacy` still lists the global store)

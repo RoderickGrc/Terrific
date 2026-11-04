@@ -121,7 +121,12 @@ export function createFakeDaemon(): FakeDaemon {
     if (found === undefined) throw new TerrificError('NOT_FOUND', `No profile called "${name}".`);
     return found;
   };
-  let sessions = [listItem('s-checkout', 'checkout flow', 1, 2), listItem('s-login', null, 3, 0)];
+  let sessions = [
+    listItem('s-checkout', 'checkout flow', 1, 2),
+    listItem('s-login', null, 3, 0),
+    // From this project's old workspace store.
+    { ...listItem('legacy-1', 'old import', 400, 0), legacy: true },
+  ];
   const views = new Map<string, SessionView>();
   const contexts = new Set<string>();
   const events = new Map<string, TerrificEvent[]>();
@@ -378,7 +383,7 @@ export function createFakeDaemon(): FakeDaemon {
     }),
     listSessions: async () => sessions,
     listLegacySessions: async () => [
-      { ...listItem('legacy-1', 'old import', 400, 0), legacy: true },
+      { ...listItem('global-1', 'global import', 500, 0), legacy: true },
     ],
     getSession: async (id) => detail(id),
     queryEvents: async (id) => events.get(id) ?? [],

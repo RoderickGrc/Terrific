@@ -301,6 +301,7 @@ describe('tui', () => {
     let text = await h.term.text();
     match(text, /Sessions {2}acme-shop/);
     match(text, /old import/);
+    ok(!text.includes('global import'), 'the global legacy store has no project, so it stays out');
     h.type('import');
     h.term.send('\x12');
     text = await h.term.text();

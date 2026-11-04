@@ -165,7 +165,8 @@ export class TuiApp implements Component, Focusable {
     this.state = {
       ...data,
       screen: 'home',
-      legacy: null,
+      // Temporary dead path: the global legacy store has no project link, so the TUI no longer loads it (`terrific sessions --legacy` lists it). Legacy sessions of this project's old workspace store come with `listSessions`.
+      legacy: [],
       live: null,
       summary: null,
       overlay: null,
@@ -1208,7 +1209,6 @@ export class TuiApp implements Component, Focusable {
     const { client } = this.deps;
     this.run(async () => {
       state.sessions = await client.listSessions(state.project.id);
-      if (state.legacy === null) state.legacy = await client.listLegacySessions();
     });
   }
 
