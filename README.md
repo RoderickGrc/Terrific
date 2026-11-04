@@ -1,4 +1,6 @@
-![terrific](docs/assets/mark.png)
+<p align="center">
+  <img src="docs/assets/mark.png" alt="Terrific" width="48" height="48">
+</p>
 
 # Terrific
 
@@ -18,17 +20,13 @@ Use the interactive terminal UI while testing, or the CLI from an agent, script,
 
 Start a recording, reproduce a failed checkout, mark the bug, and prepare the evidence for an agent.
 
-Watch the browser and terminal showcase
-
-[Watch video: browser and terminal](docs/assets/demo-split.mp4)
+https://github.com/user-attachments/assets/0d3e2903-de28-4684-8304-6d065e3fd598
 
 ### Investigate with Claude Code
 
 Follow Claude Code as it investigates a checkout that shows $76.80 but charges $84.00, using Terrific to collect runtime evidence.
 
-Watch Claude Code debug with Terrific
-
-[Watch video: Claude Code and Terrific](docs/assets/demo-agent.mp4)
+https://github.com/user-attachments/assets/c9e8621c-91be-44bd-8164-4e57af562411
 
 ## Getting started
 
@@ -147,7 +145,7 @@ terrific events SESSION_ID --around 01:20 --window 10s
 
 Run `terrific --help` or `terrific <command> --help` for all options.
 
-![Claude Code using terrific events and terrific prompt to read recorded session evidence](docs/assets/cli-help.png)
+![Terminal output of terrific --help showing CLI options and commands](docs/assets/cli-help.png)
 
 | Command | Purpose |
 | --- | --- |
