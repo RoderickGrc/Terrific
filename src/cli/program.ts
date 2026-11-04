@@ -15,6 +15,7 @@ import { registerScreenshotCommand } from './commands/screenshot.ts';
 import { registerContextCommand } from './commands/session-context.ts';
 import { registerSessionsCommand } from './commands/sessions.ts';
 import { registerShowCommand } from './commands/show.ts';
+import { registerSkillCommand } from './commands/skill.ts';
 import { registerSnapshotCommand } from './commands/snapshot.ts';
 import { registerStartCommand } from './commands/start.ts';
 import { registerStatusCommand } from './commands/status.ts';
@@ -65,6 +66,7 @@ function createProgram(io: CliIo): Command {
       },
     });
   addJsonOption(program);
+  registerSkillCommand(program, io);
   registerDaemonCommand(program, io);
   registerProjectsCommand(program, io);
   registerProfilesCommand(program, io);

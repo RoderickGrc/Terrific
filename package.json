@@ -27,11 +27,11 @@
   },
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/RoderickGrc/terrific-cli.git"
+    "url": "git+https://github.com/RoderickGrc/terrific.git"
   },
-  "homepage": "https://github.com/RoderickGrc/terrific-cli#readme",
+  "homepage": "https://github.com/RoderickGrc/terrific#readme",
   "bugs": {
-    "url": "https://github.com/RoderickGrc/terrific-cli/issues"
+    "url": "https://github.com/RoderickGrc/terrific/issues"
   },
   "scripts": {
     "dev": "node src/bin.ts",
