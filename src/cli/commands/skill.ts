@@ -1,4 +1,4 @@
-import { cp, mkdir, readFile, rm, stat } from 'node:fs/promises';
+import { cp, mkdir, readdir, readFile, rm, stat } from 'node:fs/promises';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import type { Command } from 'commander';
@@ -71,7 +71,14 @@ export function registerSkillCommand(program: Command, io: CliIo): void {
         }
         throw error;
       }
-      await cp(source, destination, { recursive: true, errorOnExist: true, force: false });
+      // The destination is reserved above; some Node versions reject copying onto that directory.
+      for (const entry of await readdir(source)) {
+        await cp(join(source, entry), join(destination, entry), {
+          recursive: true,
+          errorOnExist: true,
+          force: false,
+        });
+      }
       printLine(io, `Skill ${replacing ? 'replaced' : 'installed'} at ${destination}`);
     });
 }

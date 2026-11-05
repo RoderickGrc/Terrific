@@ -48,7 +48,7 @@ test('skill install refuses an existing skill and --force replaces it', async ()
   const destination = join(cwd, 'skills', 'terrific');
 
   const first = await install(cwd, destination);
-  equal(first.code, 0);
+  equal(first.code, 0, first.io.err);
   match(first.io.out, /Skill installed at /);
   ok(existsSync(join(destination, 'references', 'validation.md')));
 
@@ -58,7 +58,7 @@ test('skill install refuses an existing skill and --force replaces it', async ()
   match(again.io.err, /--force/);
 
   const forced = await install(cwd, destination, '--force');
-  equal(forced.code, 0);
+  equal(forced.code, 0, forced.io.err);
   match(forced.io.out, /Skill replaced at /);
   ok(existsSync(join(destination, 'SKILL.md')));
   ok(!existsSync(join(destination, 'stale.md')));
@@ -79,7 +79,7 @@ test('skill install --force leaves a directory that is not the Terrific skill', 
 test('skill install --force into a new directory installs it', async () => {
   const cwd = await tempDir();
   const forced = await install(cwd, '--force');
-  equal(forced.code, 0);
+  equal(forced.code, 0, forced.io.err);
   match(forced.io.out, /Skill installed at /);
   ok(existsSync(join(cwd, '.agents', 'skills', 'terrific', 'SKILL.md')));
 });

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Fixed
+
+- Skill installation no longer fails with `EEXIST` when copying into its newly created destination on Node.js versions used by CI.
+
 ### Added
 
 - Repository scaffolding
