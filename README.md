@@ -1,5 +1,5 @@
 <p align="center">
-  <img src="docs/assets/mark.png" alt="Terrific" width="48" height="48">
+  <img src="docs/assets/mark-small.png" alt="Terrific" width="48" height="48">
 </p>
 
 # Terrific
@@ -13,6 +13,15 @@ Record debugging sessions from your terminal. Give coding agents the runtime evi
 Terrific captures browser actions, network requests, console output, and telemetry from your code in one timeline. Reproduce a bug, mark what matters, and hand the session to a coding agent with timestamps, targeted read commands, and local evidence files.
 
 Use the interactive terminal UI while testing, or the CLI from an agent, script, or another terminal. Sessions can also run without a browser to capture backend, worker, and command-line diagnostics.
+
+## Installation
+
+Requires Node.js 22.19 or later.
+
+```sh
+npm install -g @rod.run/terrific
+terrific
+```
 
 ## Showcase
 
@@ -30,17 +39,9 @@ https://github.com/user-attachments/assets/0d3e2903-de28-4684-8304-6d065e3fd598
 
 ## Getting started
 
-Terrific is under active development. The npm package has not been published yet; install from a local checkout.
-
 Requires **Node.js 22.19 or later** and an installed Chromium-based browser, such as Chrome or Edge, for browser sessions.
 
-```sh
-npm ci
-npm run build
-npm link
-```
-
-Then open a terminal in the project you want to test:
+Open a terminal in the project you want to test:
 
 ```sh
 cd /path/to/your-project
@@ -87,7 +88,7 @@ The demo uses a fictional ticket checkout. Both the browser session and the Clau
 
 ## Debugging with an agent
 
-Terrific includes a skill that teaches coding agents to instrument a suspected code path, collect evidence, investigate the recording, and verify a fix in a new session.
+Terrific includes a skill that teaches coding agents to instrument a suspected code path, collect evidence, investigate the recording, and verify a fix in a new session. The same skill covers validation: measuring whether a known behavior holds, such as latency or streaming output, against criteria fixed before the run.
 
 ![Claude Code receiving a checkout bug report and loading the Terrific skill](docs/assets/claude-start.png)
 
@@ -103,7 +104,7 @@ The default destination is `.agents/skills/terrific`. For clients that use anoth
 terrific skill install ~/.claude/skills/terrific
 ```
 
-Installation refuses to overwrite an existing directory. See the bundled [agent skill](.agents/skills/terrific/SKILL.md) for the full workflow and telemetry examples.
+Installation refuses to overwrite an existing directory. To update an installed skill after upgrading Terrific, add `--force`, which replaces it only when the destination already holds the Terrific skill. See the bundled [agent skill](.agents/skills/terrific/SKILL.md) for the full workflow and telemetry examples.
 
 ### Bring application logs into the timeline
 

@@ -17,6 +17,8 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 - Sessions started without a name are named after their local start time and page, for example `2026-11-03 08:22 haiku.ac`
 - Profiles terrific keeps, either persistent (keeps logins and data like a normal browser) or snapshot (every session starts from a saved login and site data), managed with `terrific profiles add|open|close|rename|rm` and the `/profiles` panel in the TUI. The installed browsers' own profiles are no longer listed, since Chrome, Edge and Comet refuse automation of them
 - Agent skill in `.agents/skills/terrific`, shipped with the package: the debugging workflow with ingest endpoints and sessions, plus references for telemetry, reading events and profiles
+- Validation flow in the agent skill (`references/validation.md`): diagnostics expected to pass, with criteria fixed before the run, rated PASS or FAIL per case
+- `terrific skill install --force` replaces an installed Terrific skill, and refuses any directory that is not one
 - The TUI picks up sessions started elsewhere in the same project (`terrific start` in a shell or by an agent) within 5 s, and Enter in `/sessions` on a recording session opens its live log
 - Fixed: parallel posts to an ingest endpoint could share a `seq`, lose `eventCount` updates, or answer 500 and drop the event on Windows; endpoint writes are now serialized per project and JSON files are replaced without deleting them first
 - TUI home lists only the sessions recording in this project, with elapsed time, events, bugs and errors; stopped and legacy sessions are in `/sessions`
