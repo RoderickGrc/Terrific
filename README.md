@@ -1,4 +1,6 @@
-![terrific](docs/assets/mark.png)
+<p align="center">
+  <img src="docs/assets/mark-small.png" alt="Terrific" width="48" height="48">
+</p>
 
 # Terrific
 
@@ -12,13 +14,22 @@ Terrific captures browser actions, network requests, console output, and telemet
 
 Use the interactive terminal UI while testing, or the CLI from an agent, script, or another terminal. Sessions can also run without a browser to capture backend, worker, and command-line diagnostics.
 
+## Installation
+
+Requires Node.js 22.19 or later.
+
+```sh
+npm install -g @rod.run/terrific
+terrific
+```
+
 ## Showcase
 
 ### Record and review a browser session
 
 Start a recording, reproduce a failed checkout, mark the bug, and prepare the evidence for an agent.
 
-Watch the browser and terminal showcase
+[![Watch the browser and terminal showcase](docs/assets/split-live.png)](docs/assets/demo-split.mp4)
 
 [Watch video: browser and terminal](docs/assets/demo-split.mp4)
 
@@ -26,23 +37,15 @@ Watch the browser and terminal showcase
 
 Follow Claude Code as it investigates a checkout that shows $76.80 but charges $84.00, using Terrific to collect runtime evidence.
 
-Watch Claude Code debug with Terrific
+[![Watch Claude Code debug with Terrific](docs/assets/demo-agent-preview.png)](docs/assets/demo-agent.mp4)
 
 [Watch video: Claude Code and Terrific](docs/assets/demo-agent.mp4)
 
 ## Getting started
 
-Terrific is under active development. The npm package has not been published yet; install from a local checkout.
-
 Requires **Node.js 22.19 or later** and an installed Chromium-based browser, such as Chrome or Edge, for browser sessions.
 
-```sh
-npm ci
-npm run build
-npm link
-```
-
-Then open a terminal in the project you want to test:
+Open a terminal in the project you want to test:
 
 ```sh
 cd /path/to/your-project
@@ -147,7 +150,7 @@ terrific events SESSION_ID --around 01:20 --window 10s
 
 Run `terrific --help` or `terrific <command> --help` for all options.
 
-![Claude Code using terrific events and terrific prompt to read recorded session evidence](docs/assets/cli-help.png)
+![Terminal output of terrific --help showing CLI options and commands](docs/assets/cli-help.png)
 
 | Command | Purpose |
 | --- | --- |
