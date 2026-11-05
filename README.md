@@ -1,14 +1,14 @@
 <p align="center">
-  <img src="docs/assets/mark-small.png" alt="Terrific" width="48" height="48">
+  <img src="https://raw.githubusercontent.com/RoderickGrc/Terrific/main/docs/assets/mark-small.png" alt="Terrific" width="48" height="48">
 </p>
 
 # Terrific
 
 Record debugging sessions from your terminal. Give coding agents the runtime evidence.
 
-[Getting started](#getting-started) · [Agent workflow](#debugging-with-an-agent) · [Contributing](CONTRIBUTING.md) · [MIT license](LICENSE)
+[Getting started](#getting-started) · [Agent workflow](#debugging-with-an-agent) · [Contributing](https://github.com/RoderickGrc/Terrific/blob/main/CONTRIBUTING.md) · [MIT license](https://github.com/RoderickGrc/Terrific/blob/main/LICENSE)
 
-![terrific recording a checkout session, marking a bug, and preparing context for an agent](docs/assets/demo.gif)
+![terrific recording a checkout session, marking a bug, and preparing context for an agent](https://raw.githubusercontent.com/RoderickGrc/Terrific/main/docs/assets/demo.gif)
 
 Terrific captures browser actions, network requests, console output, and telemetry from your code in one timeline. Reproduce a bug, mark what matters, and hand the session to a coding agent with timestamps, targeted read commands, and local evidence files.
 
@@ -48,7 +48,7 @@ cd /path/to/your-project
 terrific
 ```
 
-![Terrific home screen with the project overview and command input](docs/assets/home-framed.png)
+![Terrific home screen with the project overview and command input](https://raw.githubusercontent.com/RoderickGrc/Terrific/main/docs/assets/home-framed.png)
 
 Run `terrific doctor` if setup fails. It checks Node.js, browser discovery, profiles, the data directory, and the daemon.
 
@@ -67,9 +67,9 @@ The directory where you launch Terrific identifies the project. A shared local d
 |                                                                                                    |                                                                                                                   |
 | -------------------------------------------------------------------------------------------------- | ----------------------------------------------------------------------------------------------------------------- |
 | **Compose a recording** Set the URL, session name, profile, and endpoint in one command.           | **Capture and annotate** Correlate browser actions, network failures, and app telemetry, then mark the bug.       |
-| ![New session command with parsed recording options](docs/assets/screens/new.png)                  | ![Live recording with browser events, application diagnostics, and a bug annotation](docs/assets/screens/bug.png) |
+| ![New session command with parsed recording options](https://raw.githubusercontent.com/RoderickGrc/Terrific/main/docs/assets/screens/new.png)                  | ![Live recording with browser events, application diagnostics, and a bug annotation](https://raw.githubusercontent.com/RoderickGrc/Terrific/main/docs/assets/screens/bug.png) |
 | **Review the evidence** See the timeline, event counts, bugs, errors, and saved session location.  | **Hand off to an agent** Choose an agent prompt, bugs and errors, full context, or endpoint details.              |
-| ![Stopped session summary with the timeline and errors to review](docs/assets/screens/summary.png) | ![Copy menu showing the available agent handoff formats](docs/assets/screens/copy.png)                            |
+| ![Stopped session summary with the timeline and errors to review](https://raw.githubusercontent.com/RoderickGrc/Terrific/main/docs/assets/screens/summary.png) | ![Copy menu showing the available agent handoff formats](https://raw.githubusercontent.com/RoderickGrc/Terrific/main/docs/assets/screens/copy.png)                            |
 
 Select any screenshot to open it at full size.
 
@@ -90,7 +90,7 @@ The demo uses a fictional ticket checkout. Both the browser session and the Clau
 
 Terrific includes a skill that teaches coding agents to instrument a suspected code path, collect evidence, investigate the recording, and verify a fix in a new session. The same skill covers validation: measuring whether a known behavior holds, such as latency or streaming output, against criteria fixed before the run.
 
-![Claude Code receiving a checkout bug report and loading the Terrific skill](docs/assets/claude-start.png)
+![Claude Code receiving a checkout bug report and loading the Terrific skill](https://raw.githubusercontent.com/RoderickGrc/Terrific/main/docs/assets/claude-start.png)
 
 Install it from your application's project directory:
 
@@ -104,7 +104,7 @@ The default destination is `.agents/skills/terrific`. For clients that use anoth
 terrific skill install ~/.claude/skills/terrific
 ```
 
-Installation refuses to overwrite an existing directory. To update an installed skill after upgrading Terrific, add `--force`, which replaces it only when the destination already holds the Terrific skill. See the bundled [agent skill](.agents/skills/terrific/SKILL.md) for the full workflow and telemetry examples.
+Installation refuses to overwrite an existing directory. To update an installed skill after upgrading Terrific, add `--force`, which replaces it only when the destination already holds the Terrific skill. See the bundled [agent skill](https://github.com/RoderickGrc/Terrific/blob/main/.agents/skills/terrific/SKILL.md) for the full workflow and telemetry examples.
 
 ### Bring application logs into the timeline
 
@@ -146,7 +146,7 @@ terrific events SESSION_ID --around 01:20 --window 10s
 
 Run `terrific --help` or `terrific <command> --help` for all options.
 
-![Terminal output of terrific --help showing CLI options and commands](docs/assets/cli-help.png)
+![Terminal output of terrific --help showing CLI options and commands](https://raw.githubusercontent.com/RoderickGrc/Terrific/main/docs/assets/cli-help.png)
 
 | Command | Purpose |
 | --- | --- |
@@ -192,11 +192,11 @@ npm run check
 
 `npm run check` runs lint, type checking, tests, the build, distribution smoke checks, and package validation.
 
-Read [CONTRIBUTING.md](CONTRIBUTING.md) for contribution guidelines and [SECURITY.md](SECURITY.md) for reporting vulnerabilities. Implementation notes live in [docs/design.md](docs/design.md); changes are tracked in [CHANGELOG.md](CHANGELOG.md).
+Read [CONTRIBUTING.md](https://github.com/RoderickGrc/Terrific/blob/main/CONTRIBUTING.md) for contribution guidelines and [SECURITY.md](https://github.com/RoderickGrc/Terrific/blob/main/SECURITY.md) for reporting vulnerabilities. Implementation notes live in [docs/design.md](https://github.com/RoderickGrc/Terrific/blob/main/docs/design.md); changes are tracked in [CHANGELOG.md](https://github.com/RoderickGrc/Terrific/blob/main/CHANGELOG.md).
 
 ## License
 
-[MIT](LICENSE) © Rodrigo Garciaguirre.
+[MIT](https://github.com/RoderickGrc/Terrific/blob/main/LICENSE) © Rodrigo Garciaguirre.
 
 ---
 

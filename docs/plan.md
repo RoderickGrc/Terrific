@@ -1,8 +1,8 @@
 # terrific-cli implementation plan
 
-Status: proposed on 2026-11-02, nothing implemented yet. `docs/design.md` says what terrific-cli does; this file says how it gets built, in which order, and to which standard. Where they disagree, `design.md` wins on behavior and this file wins on tooling and process.
+Status: historical implementation plan drafted on 2026-11-02. The implementation is complete for the first stable release, `@rod.run/terrific@1.0.0`. See `README.md`, `package.json` and `CHANGELOG.md` for current installation, release metadata and shipped behavior.
 
-terrific-cli is an open source package published to npm as `terrific-cli` (the name is free on the registry as of 2026-11-02). The goal from the first commit is a codebase a stranger can clone, understand and contribute to in an afternoon: few dependencies, one language, one package, honest names, every step tested.
+Terrific is an open source CLI distributed on npm as `@rod.run/terrific`, with the executable `terrific`. The goal from the first commit is a codebase a stranger can clone, understand and contribute to in an afternoon: few dependencies, one language, one package, honest names, every step tested.
 
 ## 1. Principles
 
@@ -110,15 +110,15 @@ Coverage is reported, not gated. The CI gate is: Biome, `tsc`, tests, build, `pu
 
 ```json
 {
-  "name": "terrific-cli",
-  "version": "0.1.0",
+  "name": "@rod.run/terrific",
+  "version": "1.0.0",
   "description": "Record QA sessions in a real browser from your terminal, with context ready for coding agents",
   "license": "MIT",
   "type": "module",
   "bin": { "terrific": "dist/bin.js" },
   "files": ["dist"],
   "engines": { "node": ">=22.19.0" },
-  "repository": { "type": "git", "url": "git+https://github.com/RoderickGrc/terrific-cli.git" },
+  "repository": { "type": "git", "url": "git+https://github.com/RoderickGrc/Terrific.git" },
   "scripts": {
     "dev": "node src/bin.ts",
     "build": "tsdown",
@@ -138,11 +138,11 @@ MIT, the same license terrific uses. `repository.url` must match the GitHub repo
 
 - **`ci.yml`** on every push and pull request: `npm ci`, then `npm run check`, on `ubuntu-latest` and `windows-latest` with Node 22 and 26. Windows is a first-class platform, not an afterthought.
 - **`release.yml`** on a pushed `v*` tag: `npm ci`, `npm run check`, `npm publish`, with `permissions: id-token: write` and no npm token. Trusted publishing needs npm 11.5.1+ and Node 22.14+; npm generates provenance on its own for public repositories, and a new trusted publisher configuration must complete its first publish within 2 days ([npm trusted publishers](https://docs.npmjs.com/trusted-publishers)). Classic npm tokens no longer work at all ([npm community discussion](https://github.com/orgs/community/discussions/174507)), so there is no token to leak.
-- **Versioning.** SemVer, starting at `0.1.0`. `1.0.0` when the CLI commands and `--json` shapes in design.md section 3 are stable, because agents depend on them. Releasing is `npm version <level>`, `git push --follow-tags`. `CHANGELOG.md` follows Keep a Changelog and is edited in the same pull request as the change. No release tooling beyond that.
+- **Versioning.** SemVer, with `1.0.0` as the first stable release. CLI commands and public `--json` shapes are versioned interfaces because agents depend on them. The first publication uses the verified tarball with an authenticated npm account. Configure the trusted publisher after that publication; later releases use `npm version <level>` and `git push --follow-tags`. Do not push a release tag for an already published version, since the workflow would try to publish it again. `CHANGELOG.md` follows Keep a Changelog and is edited in the same pull request as the change.
 
 ### Repository hygiene
 
-- `README.md`: what it does, install (`npm i -g terrific-cli`), the three-command agent flow, the TUI keys, where data lives, and a real screenshot from step 8.
+- `README.md`: what it does, install (`npm i -g @rod.run/terrific`), the three-command agent flow, the TUI keys, where data lives, and a real screenshot from step 8.
 - `CONTRIBUTING.md`: setup, `npm run check`, the dependency rule, commit style, how to add a command.
 - `SECURITY.md`: the local threat model (loopback daemon, token, unauthenticated ingest URLs with random tokens) and how to report a problem privately.
 - `.editorconfig`, `.node-version` (`22`), `.gitignore`. Issue templates and a code of conduct wait until there are outside contributors.
@@ -162,7 +162,7 @@ Each step is one or more pull requests, ends with its check passing in CI, and u
 
 | # | Step | Delivers | Check |
 |---|---|---|---|
-| 0 | Repository | `git init`, the files in section 3 with empty `src/bin.ts` printing the version, Biome, tsconfig, tsdown, CI, the privacy scrub of section 7 | CI green on both OSes; `npm pack --dry-run` lists only the allowed files; `npx terrific-cli@file:. --version` works from the tarball |
+| 0 | Repository | `git init`, the files in section 3 with empty `src/bin.ts` printing the version, Biome, tsconfig, tsdown, CI, the privacy scrub of section 7 | CI green on both OSes; `npm pack --dry-run` lists only the allowed files; `npm install --global ./rod.run-terrific-1.0.0.tgz`, then `terrific --version` works from the tarball |
 | 1 | TUI spike, one day | A throwaway branch with pi-tui `TuiAltScreen`: header, scrolling log at 10 events per second, input with autocomplete, an overlay, and a key probe that prints what each key sends | Run by hand in Windows Terminal: no flicker, resize works, and a written answer for Ctrl+Enter, Ctrl+Shift+Enter (risk R1), F5, F6 and clipboard. Result in `docs/decisions/tui-library.md`; the branch is deleted |
 | 2 | `core` | Event model, `/new` parser with its messages and suggestions, target and endpoint defaults, stats, network folding, context render, agent prompts, ids, validation | Every example in design.md section 2 is a test; context render matches golden files built from synthetic sessions, with the legacy sections and field names; architecture test passes |
 | 3 | `store` | Data root (same as terrific: `TERRIFIC_HOME`, else `Documents/.terrific` on Windows and `~/.terrific` elsewhere), projects with id reuse, sessions, endpoints, settings, legacy reader | `npm run check:legacy` reads every legacy session with today's counts |
@@ -171,7 +171,7 @@ Each step is one or more pull requests, ends with its check passing in CI, and u
 | 6 | `client` + `cli` | Daemon discovery and auto start, every command in design.md section 3, `--json` | An agent runs the fullstack flow of design.md section 3 from a shell, with no TUI |
 | 7 | `tui` | The screens of design.md section 2 on pi-tui (or the fallback): home, `/new` assistant, confirmation, live, stop confirmation, summary, sessions, ingest, settings, help | VirtualTerminal tests at both sizes; the flows of design.md section 2 walked by hand in Windows Terminal |
 | 8 | Profiles, doctor, in-page shortcuts | `profiles`, `doctor`, Comet, clean browser and blocked Chrome behavior, in-page keys chosen with risk R4 | The three profile cases behave as design.md says; README screenshot taken from the real TUI |
-| 9 | Release `0.1.0` | README, CONTRIBUTING, SECURITY final; GitHub repository public; trusted publisher configured on npm | `release.yml` publishes with provenance; `npm i -g terrific-cli` on a clean Windows machine opens the TUI |
+| 9 | Release `1.0.0` | README, CONTRIBUTING, SECURITY final; GitHub repository public; trusted publisher configured on npm | `release.yml` publishes with provenance; `npm i -g @rod.run/terrific` on a clean Windows machine opens the TUI |
 
 ## 9. Not in this plan
 
@@ -184,4 +184,4 @@ Each step is one or more pull requests, ends with its check passing in CI, and u
 
 - **Step 1:** pi-tui or raw ANSI; how the clipboard works on each OS (pi-tui ships native clipboard prebuilds and uses OSC 52, to be tested); the second flag binding if Ctrl+Shift+Enter fails.
 - **Step 4:** whether "clean browser" uses an installed Chrome or Edge with a fresh temporary profile, or Playwright's Chromium after `playwright-core install chromium`. A fresh profile directory is outside Chrome 136's block on the default user data dir (risk R2), so the installed browser is the first choice.
-- **Step 9:** the GitHub repository name and whether it lives under a personal account or an organization. The plan assumes `RoderickGrc/terrific-cli`.
+- **Step 9:** the GitHub repository name and whether it lives under a personal account or an organization. Resolved: `RoderickGrc/Terrific`, under the personal account.

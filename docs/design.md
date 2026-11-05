@@ -9,7 +9,7 @@ terrific-cli is a clean rewrite of Terrific as a separate project. It becomes th
 | Topic | Decision |
 |---|---|
 | Engine | Full rewrite, based on the current behavior, with clean architecture and honest names |
-| Package | Separate project and package `terrific-cli`, command `terrific`. The terrific web command becomes `terrific-web` |
+| Package | Separate project, npm package `@rod.run/terrific`, command `terrific`. The terrific web command becomes `terrific-web` |
 | Background process | One daemon shared by all projects on the machine |
 | Storage | `<data root>/projects/<project-id>/`. The data root is the one terrific already uses: `Documents/.terrific` on Windows, `~/.terrific` elsewhere, or `TERRIFIC_HOME` when set |
 | Project id | Short 8-character id, the same format terrific already uses for workspaces; the id terrific already gave a directory is reused |
