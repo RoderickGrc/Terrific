@@ -7,6 +7,7 @@ import { tmpdir } from 'node:os';
 import { dirname, join } from 'node:path';
 import { after, test } from 'node:test';
 import { fileURLToPath } from 'node:url';
+import type { Page } from 'playwright-core';
 import type { EventInput } from '../src/core/events.ts';
 import { findInstalledBrowsers } from '../src/recorder/browsers.ts';
 import { startRecording } from '../src/recorder/recording.ts';
@@ -278,5 +279,248 @@ test('an unreachable start URL still starts the session and records the failure'
     ok(events.some((event) => event.kind === 'network' && event.phase === 'failed'));
   } finally {
     await recording.stop();
+  }
+});
+
+function firstBrowser(t: { skip: (reason?: string) => void }) {
+  const browser = findInstalledBrowsers({
+    platform: process.platform,
+    env: process.env,
+    exists: existsSync,
+  })[0];
+  if (browser === undefined) {
+    t.skip('no Chromium-based browser installed');
+    return undefined;
+  }
+  return browser;
+}
+
+function collectEvents(): {
+  events: EventInput[];
+  onEvent: (event: EventInput) => void;
+  appendEvent: (event: EventInput) => Promise<{ id: string }>;
+} {
+  const events: EventInput[] = [];
+  let n = 0;
+  return {
+    events,
+    onEvent: (event) => {
+      events.push(event);
+    },
+    appendEvent: async (event) => {
+      events.push(event);
+      n += 1;
+      return { id: `ev_test_${n}` };
+    },
+  };
+}
+
+async function openComposer(page: Page): Promise<void> {
+  await page.click('h1', { button: 'right', modifiers: ['Alt'] });
+  await page.locator('terrific-composer .panel').waitFor({ state: 'visible' });
+}
+
+test('composer opens on Alt+right-click and stays closed on plain right-click', {
+  timeout: 30_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: true, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await page.click('h1', { button: 'right' });
+    equal(await page.locator('terrific-composer .panel').isVisible(), false);
+
+    await openComposer(page);
+    equal(await page.locator('terrific-composer .panel').isVisible(), true);
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});
+
+test('composer Point tool submits a note without recording composer actions', {
+  timeout: 60_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: true, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await page.locator('#email').waitFor();
+    const actionsBefore = collected.events.filter((event) => event.kind === 'action').length;
+
+    await openComposer(page);
+    await page.locator('terrific-composer .tl', { hasText: 'Point' }).click();
+    await page.locator('#email').click();
+    await page.locator('terrific-composer .ed').click();
+    await page.keyboard.type('typed note body');
+    await page.keyboard.press('Control+Enter');
+
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'note'));
+    const notes = collected.events.filter((event) => event.kind === 'note');
+    equal(notes.length, 1);
+    if (notes[0]?.kind === 'note') {
+      equal(notes[0].author, 'tester');
+      match(notes[0].text, /\[element /);
+      match(notes[0].text, /typed note body/);
+    }
+    const actionsAfter = collected.events.filter((event) => event.kind === 'action').length;
+    equal(actionsAfter, actionsBefore);
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});
+
+test('composer Screenshot and Snapshot tools append captures and store a bug with chips', {
+  timeout: 60_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: true, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await openComposer(page);
+    await page.locator('terrific-composer .tl', { hasText: 'Screenshot' }).click();
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'screenshot'));
+    const shot = collected.events.find((event) => event.kind === 'screenshot');
+    equal(shot?.kind, 'screenshot');
+    if (shot?.kind === 'screenshot') {
+      const absolute = join(screenshotsDir, shot.file.replace(/^screenshots\//, ''));
+      ok((await stat(absolute)).size > 0);
+    }
+
+    await page.locator('terrific-composer .tl', { hasText: 'Snapshot' }).click();
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'snapshot'));
+    equal(await page.locator('terrific-composer .ch.cap').count(), 2);
+
+    await page.locator('terrific-composer .ed').click();
+    await page.keyboard.press('Control+Shift+Enter');
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'bug'));
+    const bugs = collected.events.filter((event) => event.kind === 'bug');
+    equal(bugs.length, 1);
+    if (bugs[0]?.kind === 'bug') {
+      equal(bugs[0].author, 'tester');
+      match(bugs[0].text ?? '', /\[screenshot screenshots\/ss_/);
+      match(bugs[0].text ?? '', /\[snapshot ev_test_/);
+    }
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});
+
+test('composer still opens and submits a note when actions are disabled', {
+  timeout: 30_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: false, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await openComposer(page);
+    await page.locator('terrific-composer .ed').click();
+    await page.keyboard.type('actions off note');
+    await page.keyboard.press('Control+Enter');
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'note'));
+    const note = collected.events.find((event) => event.kind === 'note');
+    equal(note?.kind, 'note');
+    if (note?.kind === 'note') {
+      equal(note.author, 'tester');
+      match(note.text, /actions off note/);
+    }
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});
+
+test('composer stores an empty bug with null text', {
+  timeout: 30_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: false, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await openComposer(page);
+    await page.locator('terrific-composer .ed').click();
+    await page.keyboard.press('Control+Shift+Enter');
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'bug'));
+    const bug = collected.events.find((event) => event.kind === 'bug');
+    equal(bug?.kind, 'bug');
+    if (bug?.kind === 'bug') {
+      equal(bug.text, null);
+      equal(bug.author, 'tester');
+    }
+  } finally {
+    await recording.stop();
+    await site.close();
   }
 });

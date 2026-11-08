@@ -6,10 +6,14 @@ import type { RandomSource } from '../core/ids.ts';
 import { randomId } from '../core/ids.ts';
 import type { RecordOptions } from '../core/setup.ts';
 import { parseActionPayload } from './action-payload.ts';
+import { handleComposerRequest } from './composer-bridge.ts';
+import { COMPOSER_BINDING, composerScriptSource } from './composer-script.ts';
 import { htmlToMarkdown } from './html-markdown.ts';
 import { type LaunchedBrowser, type LaunchOptions, launchBrowser } from './launch.ts';
 import { attachNetwork } from './network.ts';
 import { BINDING_NAME, pageScriptSource } from './page-script.ts';
+
+const PREVIEW_MAX_BYTES = 2_000_000;
 
 export type RecordingOptions = {
   browser: LaunchOptions;
@@ -18,6 +22,7 @@ export type RecordingOptions = {
   screenshotsDir: string;
   random: RandomSource;
   onEvent: (event: EventInput) => void;
+  appendEvent?: (event: EventInput) => Promise<{ id: string }>;
 };
 
 export type Recording = {
@@ -39,6 +44,17 @@ function mapConsoleLevel(type: string): ConsoleLevel {
 
 function isOpen(page: Page): boolean {
   return !page.isClosed();
+}
+
+function collapseExcerpt(markdown: string): string {
+  return markdown.replace(/\s+/g, ' ').trim().slice(0, 160);
+}
+
+async function pageViewport(page: Page): Promise<{ width: number; height: number }> {
+  const size = page.viewportSize();
+  if (size !== null) return size;
+  const [width, height] = await page.evaluate(() => [window.innerWidth, window.innerHeight]);
+  return { width, height };
 }
 
 export async function startRecording(options: RecordingOptions): Promise<Recording> {
@@ -81,6 +97,54 @@ async function attachRecording(
     return current;
   }
 
+  async function emitComposer(event: EventInput): Promise<{ id: string | null }> {
+    if (options.appendEvent !== undefined) {
+      return options.appendEvent(event);
+    }
+    options.onEvent(event);
+    return { id: null };
+  }
+
+  async function takeScreenshot(page: Page): Promise<{
+    file: string;
+    absolute: string;
+    bytes: number;
+    buffer: Buffer;
+  }> {
+    await mkdir(options.screenshotsDir, { recursive: true });
+    const id = randomId(10, options.random);
+    const name = `ss_${id}.png`;
+    const absolute = join(options.screenshotsDir, name);
+    const buffer = await page.screenshot({ path: absolute, type: 'png' });
+    const bytes = buffer.length > 0 ? buffer.length : (await stat(absolute)).size;
+    return { file: `screenshots/${name}`, absolute, bytes, buffer };
+  }
+
+  async function takeSnapshot(page: Page): Promise<{
+    event: Extract<EventInput, { kind: 'snapshot' }>;
+    excerpt: string;
+  }> {
+    let html = '';
+    let title = '';
+    let url = '';
+    try {
+      html = await page.content();
+      title = await page.title();
+      url = page.url();
+    } catch {
+      title = '';
+    }
+    const converted = htmlToMarkdown(html);
+    const event: Extract<EventInput, { kind: 'snapshot' }> = {
+      kind: 'snapshot',
+      url,
+      title,
+      wordCount: converted.wordCount,
+      markdown: converted.markdown,
+    };
+    return { event, excerpt: collapseExcerpt(converted.markdown) };
+  }
+
   async function attachPage(page: Page): Promise<void> {
     setCurrent(page);
     page.on('close', () => {
@@ -112,6 +176,11 @@ async function attachRecording(
         // The document may already be navigating; addInitScript covers the next load.
       }
     }
+    try {
+      await page.evaluate(composerScriptSource(COMPOSER_BINDING));
+    } catch {
+      // The document may already be navigating; addInitScript covers the next load.
+    }
   }
 
   if (options.record.actions) {
@@ -120,8 +189,52 @@ async function attachRecording(
       const event = parseActionPayload(payload);
       if (event !== null) options.onEvent(event);
     });
+  }
+  await context.exposeBinding(COMPOSER_BINDING, async (source, op: unknown, payload?: unknown) => {
+    setCurrent(source.page);
+    return handleComposerRequest(op, payload, {
+      screenshot: async () => {
+        const captured = await takeScreenshot(source.page);
+        await emitComposer({
+          kind: 'screenshot',
+          file: captured.file,
+          bytes: captured.bytes,
+        });
+        const viewport = await pageViewport(source.page);
+        const preview =
+          captured.bytes > PREVIEW_MAX_BYTES
+            ? null
+            : `data:image/png;base64,${captured.buffer.toString('base64')}`;
+        return {
+          file: captured.file,
+          width: viewport.width,
+          height: viewport.height,
+          preview,
+        };
+      },
+      snapshot: async () => {
+        const { event, excerpt } = await takeSnapshot(source.page);
+        const { id } = await emitComposer(event);
+        return {
+          id,
+          title: event.title,
+          wordCount: event.wordCount,
+          excerpt,
+        };
+      },
+      submit: async (kind, text) => {
+        if (kind === 'note') {
+          if (text === null) throw new Error('Note text is required.');
+          return emitComposer({ kind: 'note', text, author: 'tester' });
+        }
+        return emitComposer({ kind: 'bug', text, author: 'tester' });
+      },
+    });
+  });
+  if (options.record.actions) {
     await context.addInitScript({ content: pageScriptSource(BINDING_NAME) });
   }
+  await context.addInitScript({ content: composerScriptSource(COMPOSER_BINDING) });
   if (options.record.network) attachNetwork(context, options.onEvent);
   if (options.record.console) {
     context.on('console', (msg) => {
@@ -162,38 +275,14 @@ async function attachRecording(
     },
     context,
     async snapshot() {
-      const page = currentPage();
-      let html = '';
-      let title = '';
-      let url = '';
-      try {
-        html = await page.content();
-        title = await page.title();
-        url = page.url();
-      } catch {
-        title = '';
-      }
-      const converted = htmlToMarkdown(html);
-      const event: EventInput = {
-        kind: 'snapshot',
-        url,
-        title,
-        wordCount: converted.wordCount,
-        markdown: converted.markdown,
-      };
+      const { event } = await takeSnapshot(currentPage());
       options.onEvent(event);
       return event;
     },
     async screenshot() {
-      await mkdir(options.screenshotsDir, { recursive: true });
-      const id = randomId(10, options.random);
-      const name = `ss_${id}.png`;
-      const absolute = join(options.screenshotsDir, name);
-      const page = currentPage();
-      const buffer = await page.screenshot({ path: absolute, type: 'png' });
-      const bytes = buffer.length > 0 ? buffer.length : (await stat(absolute)).size;
-      options.onEvent({ kind: 'screenshot', file: `screenshots/${name}`, bytes });
-      return absolute;
+      const captured = await takeScreenshot(currentPage());
+      options.onEvent({ kind: 'screenshot', file: captured.file, bytes: captured.bytes });
+      return captured.absolute;
     },
     async stop() {
       finish('stopped');
