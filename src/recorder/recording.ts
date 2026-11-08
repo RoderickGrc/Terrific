@@ -1,12 +1,16 @@
-import { mkdir, stat } from 'node:fs/promises';
-import { join } from 'node:path';
+import { mkdir, readFile, stat } from 'node:fs/promises';
+import { basename, join } from 'node:path';
 import type { BrowserContext, Page } from 'playwright-core';
 import type { EventInput } from '../core/events.ts';
 import type { RandomSource } from '../core/ids.ts';
 import { randomId } from '../core/ids.ts';
 import type { RecordOptions } from '../core/setup.ts';
 import { parseActionPayload } from './action-payload.ts';
-import { handleComposerRequest } from './composer-bridge.ts';
+import {
+  type ComposerDraft,
+  type ComposerSegment,
+  handleComposerRequest,
+} from './composer-bridge.ts';
 import { COMPOSER_BINDING, composerScriptSource } from './composer-script.ts';
 import { htmlToMarkdown } from './html-markdown.ts';
 import { type LaunchedBrowser, type LaunchOptions, launchBrowser } from './launch.ts';
@@ -74,6 +78,9 @@ async function attachRecording(
 ): Promise<Recording> {
   const { context } = launched;
   let current = launched.page;
+  let composerDraft: ComposerDraft | null = null;
+  let screenshotLabelCount = 0;
+  let snapshotLabelCount = 0;
   let outcome: 'stopped' | 'browser-closed' | null = null;
   let resolveClosed: ((reason: 'stopped' | 'browser-closed') => void) | undefined;
   const closed = new Promise<'stopped' | 'browser-closed'>((resolve) => {
@@ -118,6 +125,30 @@ async function attachRecording(
     const buffer = await page.screenshot({ path: absolute, type: 'png' });
     const bytes = buffer.length > 0 ? buffer.length : (await stat(absolute)).size;
     return { file: `screenshots/${name}`, absolute, bytes, buffer };
+  }
+
+  async function screenshotPreview(file: string): Promise<string | null> {
+    const absolute = join(options.screenshotsDir, basename(file));
+    try {
+      const info = await stat(absolute);
+      if (!info.isFile() || info.size > PREVIEW_MAX_BYTES) return null;
+      const buffer = await readFile(absolute);
+      return `data:image/png;base64,${buffer.toString('base64')}`;
+    } catch {
+      return null;
+    }
+  }
+
+  async function draftWithPreviews(
+    draft: ComposerDraft,
+  ): Promise<ComposerDraft & { segments: (ComposerSegment & { preview?: string | null })[] }> {
+    const segments = await Promise.all(
+      draft.segments.map(async (segment) => {
+        if (segment.type !== 'screenshot') return segment;
+        return { ...segment, preview: await screenshotPreview(segment.file) };
+      }),
+    );
+    return { ...draft, segments };
   }
 
   async function takeSnapshot(page: Page): Promise<{
@@ -205,21 +236,25 @@ async function attachRecording(
           captured.bytes > PREVIEW_MAX_BYTES
             ? null
             : `data:image/png;base64,${captured.buffer.toString('base64')}`;
+        screenshotLabelCount += 1;
         return {
           file: captured.file,
           width: viewport.width,
           height: viewport.height,
           preview,
+          label: `Screenshot ${screenshotLabelCount}`,
         };
       },
       snapshot: async () => {
         const { event, excerpt } = await takeSnapshot(source.page);
         const { id } = await emitComposer(event);
+        snapshotLabelCount += 1;
         return {
           id,
           title: event.title,
           wordCount: event.wordCount,
           excerpt,
+          label: `Snapshot ${snapshotLabelCount}`,
         };
       },
       submit: async (kind, text) => {
@@ -228,6 +263,13 @@ async function attachRecording(
           return emitComposer({ kind: 'note', text, author: 'tester' });
         }
         return emitComposer({ kind: 'bug', text, author: 'tester' });
+      },
+      loadDraft: async () => {
+        if (composerDraft === null) return { draft: null };
+        return { draft: await draftWithPreviews(composerDraft) };
+      },
+      saveDraft: async (draft) => {
+        composerDraft = draft;
       },
     });
   });
