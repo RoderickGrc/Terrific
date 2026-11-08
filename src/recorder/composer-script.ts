@@ -1,0 +1,783 @@
+/// <reference lib="dom" />
+
+// This function is serialized and evaluated in the page; keep all helpers local.
+export const COMPOSER_BINDING = '__terrificCompose';
+export const composerScript: (bindingName: string) => void = function composerScript(bindingName) {
+  if (window !== window.top) return;
+  const w = window as unknown as Record<string, unknown>;
+  if (w.__terrificComposer) return;
+  w.__terrificComposer = true;
+
+  function h(tag: string, attrs: Record<string, string> = {}, children: (Node | string)[] = []) {
+    const el = document.createElement(tag);
+    for (const [name, value] of Object.entries(attrs)) el.setAttribute(name, value);
+    el.append(...children);
+    return el;
+  }
+  function svg(paths: string[], size = 14) {
+    const el = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    for (const [key, value] of Object.entries({
+      width: `${size}`,
+      height: `${size}`,
+      viewBox: '0 0 24 24',
+      fill: 'none',
+      stroke: 'currentColor',
+      'stroke-width': '2',
+      'stroke-linecap': 'round',
+      'stroke-linejoin': 'round',
+      'aria-hidden': 'true',
+    }))
+      el.setAttribute(key, value);
+    for (const d of paths) {
+      const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      path.setAttribute('d', d);
+      el.append(path);
+    }
+    return el;
+  }
+  const icons = {
+    msg: ['M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z'],
+    bug: [
+      'm8 2 1.88 1.88M14.12 3.88 16 2M9 7.13v-1a3 3 0 1 1 6 0v1',
+      'M12 20c-3.3 0-6-2.7-6-6v-3a4 4 0 0 1 4-4h4a4 4 0 0 1 4 4v3c0 3.3-2.7 6-6 6M12 20v-9M6.53 9C4.6 8.8 3 7.1 3 5M6 13H2M3 21c0-2.1 1.7-3.9 3.8-4M20.97 5c0 2.1-1.6 3.8-3.5 4M22 13h-4M17.2 17c2.1.1 3.8 1.9 3.8 4',
+    ],
+    cam: [
+      'M14.5 4h-5L7 7H4a2 2 0 0 0-2 2v9a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2V9a2 2 0 0 0-2-2h-3l-2.5-3z',
+      'M15 13a3 3 0 1 1-6 0 3 3 0 0 1 6 0z',
+    ],
+    scan: [
+      'M3 7V5a2 2 0 0 1 2-2h2M17 3h2a2 2 0 0 1 2 2v2M21 17v2a2 2 0 0 1-2 2h-2M7 21H5a2 2 0 0 1-2-2v-2M7 12h10',
+    ],
+    ptr: [
+      'M4.04 4.69a.5.5 0 0 1 .65-.65l16 6.5a.5.5 0 0 1-.06.95l-6.12 1.58a2 2 0 0 0-1.44 1.44l-1.58 6.12a.5.5 0 0 1-.95.07z',
+    ],
+    x: ['M18 6 6 18M6 6l12 12'],
+  };
+  const css = `
+:host{all:initial}
+*{box-sizing:border-box}
+[hidden]{display:none!important}
+.layer{position:fixed;inset:0;pointer-events:none;z-index:2147483646;font:500 13px/1.4 Inter,system-ui,"Segoe UI",sans-serif;color:#e4e4e7;-webkit-font-smoothing:antialiased}
+.layer.capturing{visibility:hidden}
+button{font:inherit;cursor:pointer}
+button:focus-visible{outline:2px solid rgba(255,255,255,.45);outline-offset:1px}
+button:disabled{cursor:default;opacity:.4}
+.panel{position:fixed;pointer-events:auto;width:366px;max-width:calc(100vw - 16px);background:#18181b;border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,.5);overflow:hidden}
+.hd{display:flex;align-items:center;gap:8px;height:38px;padding:0 6px 0 12px;background:rgba(24,24,27,.8);border-bottom:1px solid rgba(255,255,255,.05);cursor:grab;color:#52525b;user-select:none;touch-action:none}
+.hd.dragging{cursor:grabbing}
+.hd h2{margin:0;font:700 11px Inter,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#fff}
+.ib{margin-left:auto;width:28px;height:28px;display:grid;place-items:center;border:0;border-radius:8px;background:transparent;color:#71717a}
+.ib:hover{color:#fff;background:rgba(255,255,255,.05)}
+.edwrap{position:relative;background:#09090b}
+.edwrap:focus-within{box-shadow:inset 0 0 0 1px rgba(255,255,255,.12)}
+.ed{min-height:96px;max-height:240px;overflow:auto;padding:12px 14px;font:400 14px/1.85 Inter,system-ui,sans-serif;color:#f4f4f5;outline:none;white-space:pre-wrap;word-break:break-word;caret-color:#fff}
+.ed.empty::before{content:attr(data-placeholder);color:#52525b;position:absolute;pointer-events:none}
+.ch{display:inline-flex;align-items:center;gap:4px;height:21px;padding:0 6px;margin:0 1px;vertical-align:1px;border-radius:6px;font:500 12px/1 "JetBrains Mono",Consolas,monospace;white-space:nowrap;user-select:all;cursor:default}
+.ch.el{background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.1);color:#a5b4fc}
+.ch.cap{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#e4e4e7;font-family:Inter,system-ui,sans-serif}
+.ch.cap svg{color:#22d3ee}
+.ch:hover{filter:brightness(1.25)}
+.ch .rm{display:none;width:14px;height:14px;margin:0 -2px 0 1px;border:0;padding:0;border-radius:3px;background:transparent;color:inherit;place-items:center}
+.ch:hover .rm{display:inline-grid}
+.ch .rm:hover{background:rgba(255,255,255,.12)}
+.tools{display:flex;align-items:center;gap:2px;padding:6px 8px;background:#18181b;border-top:1px solid rgba(255,255,255,.05)}
+.tl{display:inline-flex;align-items:center;gap:6px;height:28px;padding:0 8px;border:0;border-radius:8px;background:transparent;color:#a1a1aa;font-size:12px;font-weight:500}
+.tl svg{color:#71717a}
+.tl:hover:not(:disabled){color:#fff;background:rgba(255,255,255,.05)}
+.tl:hover:not(:disabled) svg{color:#fff}
+.tl[aria-pressed=true]{background:rgba(99,102,241,.15);color:#a5b4fc}
+.tl[aria-pressed=true] svg{color:#a5b4fc}
+.ft{display:flex;align-items:center;gap:6px;padding:8px;border-top:1px solid rgba(255,255,255,.05);background:#18181b;min-height:47px}
+.idle{display:contents}
+.hint{font:400 11px "JetBrains Mono",Consolas,monospace;color:#71717a;padding:0 6px;display:flex;align-items:center;gap:4px}
+kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px solid rgba(255,255,255,.1);border-radius:4px;padding:1px 4px}
+.bn{height:30px;padding:0 10px;border-radius:8px;display:inline-flex;align-items:center;gap:6px;font-size:13px;font-weight:500;border:1px solid transparent}
+.bb{margin-left:auto;background:rgba(239,68,68,.1);color:#f87171;border-color:rgba(239,68,68,.2)}
+.bb:hover:not(:disabled){background:rgba(239,68,68,.2)}
+.bw{background:#fff;color:#000}
+.bw:hover:not(:disabled){background:#e4e4e7}
+.err{margin:0;padding:8px 14px;font-size:12px;color:#fca5a5;background:rgba(239,68,68,.08);border-top:1px solid rgba(239,68,68,.15)}
+.hl,.ref{position:fixed;pointer-events:none;border-radius:4px}
+.hl{border:2px solid #a5b4fc;background:rgba(165,180,252,.14)}
+.ref{border:2px dashed #a5b4fc}
+.tg{position:absolute;left:-2px;bottom:100%;background:#a5b4fc;color:#09090b;font:500 11px/18px "JetBrains Mono",Consolas,monospace;padding:0 6px;border-radius:4px 4px 0 0;white-space:nowrap}
+.tg.inside{bottom:auto;top:0;border-radius:0 0 4px 0}
+.pop{position:fixed;width:224px;padding:6px;background:#18181b;border:1px solid rgba(255,255,255,.1);border-radius:10px;box-shadow:0 12px 30px rgba(0,0,0,.45)}
+.pop .im{position:relative;max-height:160px;border-radius:6px;overflow:hidden;background:#fff}
+.pop img{display:block;width:100%;height:auto}
+.pop .meta{display:flex;justify-content:space-between;gap:8px;margin:6px 2px 0;font:400 11px Inter,system-ui,sans-serif;color:#a1a1aa}
+.pop .meta b{color:#e4e4e7;font-weight:500}
+.pop .sn{padding:4px 4px 2px;font:400 12px/1.5 Inter,system-ui,sans-serif;color:#a1a1aa}
+.pop .sn b{display:block;color:#e4e4e7;font-weight:500;margin-bottom:2px}
+.pop .excerpt{margin-top:4px;color:#71717a}
+.toast{position:fixed;right:20px;bottom:20px;pointer-events:auto;display:flex;align-items:center;gap:8px;padding:10px 14px;background:#18181b;border:1px solid rgba(255,255,255,.1);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.4);color:#e4e4e7}
+.toast svg{color:#a5b4fc}
+.toast.bug svg{color:#f87171}
+@media (max-width:420px){.toast{right:12px;left:12px;bottom:12px}}
+`;
+  const host = document.createElement('terrific-composer');
+  // Init scripts can run before <html> exists; the Alt+right-click handler attaches the host on demand.
+  if (document.documentElement) document.documentElement.append(host);
+  const root = host.attachShadow({ mode: 'open' });
+  if (
+    'adoptedStyleSheets' in root &&
+    typeof CSSStyleSheet !== 'undefined' &&
+    'replaceSync' in CSSStyleSheet.prototype
+  ) {
+    const sheet = new CSSStyleSheet();
+    sheet.replaceSync(css);
+    root.adoptedStyleSheets = [sheet];
+  } else {
+    const style = document.createElement('style');
+    style.textContent = css;
+    root.append(style);
+  }
+  const button = (
+    cls: string,
+    label: string,
+    icon: string[],
+    attrs: Record<string, string> = {},
+  ) => {
+    const text = h('span', {}, [label]);
+    const el = h('button', { class: cls, type: 'button', ...attrs }, [
+      svg(icon),
+      text,
+    ]) as HTMLButtonElement;
+    return { el, text };
+  };
+  const layer = h('div', { class: 'layer' });
+  const ref = h('div', { class: 'ref', hidden: '' });
+  const tag = h('span', { class: 'tg' });
+  const hl = h('div', { class: 'hl', hidden: '' }, [tag]);
+  const panel = h('section', {
+    class: 'panel',
+    role: 'dialog',
+    'aria-modal': 'false',
+    'aria-labelledby': 'tc-title',
+    hidden: '',
+  });
+  const grip = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  for (const [key, value] of Object.entries({
+    width: '10',
+    height: '16',
+    viewBox: '0 0 10 16',
+    fill: 'currentColor',
+    'aria-hidden': 'true',
+  }))
+    grip.setAttribute(key, value);
+  for (const x of [2, 8])
+    for (const y of [3, 8, 13]) {
+      const circle = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+      circle.setAttribute('cx', `${x}`);
+      circle.setAttribute('cy', `${y}`);
+      circle.setAttribute('r', '1.4');
+      grip.append(circle);
+    }
+  const closeBtn = h(
+    'button',
+    {
+      class: 'ib close',
+      type: 'button',
+      'aria-label': 'Close',
+      title: 'Close (Esc). The draft is kept.',
+    },
+    [svg(icons.x)],
+  );
+  const hd = h('div', { class: 'hd' }, [grip, h('h2', { id: 'tc-title' }, ['New note']), closeBtn]);
+  const ed = h('div', {
+    class: 'ed empty',
+    contenteditable: 'true',
+    role: 'textbox',
+    'aria-multiline': 'true',
+    'aria-labelledby': 'tc-title',
+    'data-placeholder': 'Describe what happened',
+    spellcheck: 'true',
+  });
+  const point = button('tl', 'Point', icons.ptr, { 'aria-pressed': 'false' });
+  const shot = button('tl', 'Screenshot', icons.cam);
+  const snap = button('tl', 'Snapshot', icons.scan);
+  const err = h('p', { class: 'err', role: 'alert', hidden: '' });
+  const bug = button('bn bb', 'Bug', icons.bug, { title: 'Save as bug (Ctrl+Shift+Enter)' });
+  const note = button('bn bw', 'Note', icons.msg, { title: 'Save as note (Ctrl+Enter)' });
+  const idle = h('div', { class: 'idle' }, [
+    h('span', { class: 'hint' }, [h('kbd', {}, ['Ctrl']), h('kbd', {}, ['↵']), ' note']),
+    bug.el,
+    note.el,
+  ]);
+  const pointingHint = h('span', { class: 'hint', hidden: '' }, [
+    'click to add · ↑↓ level · enter · esc',
+  ]);
+  panel.append(
+    hd,
+    h('div', { class: 'edwrap' }, [ed]),
+    h('div', { class: 'tools' }, [point.el, shot.el, snap.el]),
+    err,
+    h('div', { class: 'ft' }, [idle, pointingHint]),
+  );
+  const pop = h('div', { class: 'pop', hidden: '' });
+  const toast = h('div', { class: 'toast', role: 'status', 'aria-live': 'polite', hidden: '' });
+  layer.append(ref, hl, panel, pop, toast);
+  root.append(layer);
+  type Chip =
+    | { kind: 'element'; el: Element; selector: string; name: string }
+    | {
+        kind: 'screenshot';
+        label: string;
+        file: string;
+        width: number;
+        height: number;
+        preview: string | null;
+      }
+    | {
+        kind: 'snapshot';
+        label: string;
+        id: string | null;
+        title: string;
+        wordCount: number;
+        excerpt: string;
+      };
+  const chipData = new WeakMap<Element, Chip>();
+  const counters = { screenshot: 0, snapshot: 0 };
+  let savedRange: Range | null = null;
+  let busy = false;
+  let moved = false;
+  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  const selection = () =>
+    'getSelection' in root && typeof root.getSelection === 'function'
+      ? (root.getSelection as () => Selection | null)()
+      : document.getSelection();
+  const clamp = (v: number, lo: number, hi: number) => Math.max(lo, Math.min(hi, v));
+  const isOurs = (e: Event) => e.composedPath().includes(host);
+  const usable = (el: Element | null): el is Element =>
+    !!el && el !== document.documentElement && el !== document.body && el !== host;
+  function selectorFor(el: Element) {
+    const parts: string[] = [];
+    for (
+      let n: Element | null = el;
+      n && n !== document.body && parts.length < 4;
+      n = n.parentElement
+    ) {
+      if (n.id) {
+        parts.unshift(
+          `${n.localName}#${typeof window.CSS === 'undefined' ? n.id : CSS.escape(n.id)}`,
+        );
+        break;
+      }
+      let part = n.localName;
+      const siblings = n.parentElement
+        ? Array.from(n.parentElement.children).filter((c) => c.localName === n?.localName)
+        : [];
+      if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(n) + 1})`;
+      parts.unshift(part);
+    }
+    return parts.join(' > ');
+  }
+  function accessibleName(el: Element) {
+    const labelled = 'labels' in el ? (el as HTMLInputElement).labels?.[0] : null;
+    const heading = el.querySelector('h1,h2,h3,h4,h5,h6,legend,caption');
+    const visible = (node: Element | null) =>
+      // biome-ignore lint/performance/useDomNodeTextContent: visible text matches the mock's accessible names.
+      node instanceof HTMLElement ? node.innerText : node?.textContent || '';
+    const leaf =
+      el.childElementCount === 0 && !/^(input|textarea|select)$/.test(el.localName)
+        ? visible(el)
+        : '';
+    return (
+      el.getAttribute('aria-label') ||
+      visible(labelled || null) ||
+      visible(heading) ||
+      leaf ||
+      ''
+    )
+      .replace(/\s+/g, ' ')
+      .trim()
+      .slice(0, 40);
+  }
+  function hasContent() {
+    return !!ed.textContent?.trim() || !!ed.querySelector('.ch');
+  }
+  function update() {
+    if (!hasContent()) ed.replaceChildren();
+    ed.classList.toggle('empty', !hasContent());
+    note.el.disabled = busy || !hasContent();
+    bug.el.disabled = busy;
+    for (const b of [point.el, shot.el, snap.el]) b.disabled = busy;
+  }
+  function endRange() {
+    const r = document.createRange();
+    r.selectNodeContents(ed);
+    r.collapse(false);
+    return r;
+  }
+  function placeCaret(r: Range) {
+    const s = selection();
+    if (!s) return;
+    s.removeAllRanges();
+    s.addRange(r);
+    savedRange = r.cloneRange();
+  }
+  function rangeInEditor() {
+    return savedRange && ed.contains(savedRange.startContainer)
+      ? savedRange.cloneRange()
+      : endRange();
+  }
+  function needsLeadingSpace(r: Range) {
+    const c = r.startContainer,
+      o = r.startOffset;
+    if (c.nodeType === Node.TEXT_NODE) return o > 0 && !/\s/.test((c as Text).data.charAt(o - 1));
+    const prev = c.childNodes[o - 1];
+    if (!prev) return false;
+    return prev.nodeType === Node.TEXT_NODE
+      ? !/\s$/.test((prev as Text).data)
+      : prev.nodeName !== 'BR';
+  }
+  function insertChip(chip: HTMLElement) {
+    ed.focus({ preventScroll: true });
+    const r = rangeInEditor();
+    r.deleteContents();
+    const after = document.createTextNode(' '),
+      frag = document.createDocumentFragment();
+    if (needsLeadingSpace(r)) frag.append(' ');
+    frag.append(chip, after);
+    r.insertNode(frag);
+    const caret = document.createRange();
+    caret.setStartAfter(after);
+    caret.collapse(true);
+    placeCaret(caret);
+    update();
+  }
+  function makeChip(data: Chip, label: string, icon?: string[]) {
+    const chip = h('span', {
+      class: `ch ${data.kind === 'element' ? 'el' : 'cap'}`,
+      contenteditable: 'false',
+    });
+    if (icon) chip.append(svg(icon, 12));
+    chip.append(
+      h('span', {}, [label]),
+      h('button', { class: 'rm', type: 'button', tabindex: '-1', 'aria-label': 'Remove' }, [
+        svg(icons.x, 10),
+      ]),
+    );
+    chipData.set(chip, data);
+    return chip;
+  }
+  function addElement(el: Element | null) {
+    if (!usable(el)) return;
+    const selector = selectorFor(el);
+    const chip = makeChip(
+      { kind: 'element', el, selector, name: accessibleName(el) },
+      `<${el.localName}>`,
+    );
+    chip.title = selector;
+    insertChip(chip);
+  }
+  document.addEventListener('selectionchange', () => {
+    const s = selection();
+    if (s?.rangeCount && ed.contains(s.getRangeAt(0).startContainer))
+      savedRange = s.getRangeAt(0).cloneRange();
+  });
+  ed.addEventListener('input', () => {
+    hideError();
+    update();
+  });
+  ed.addEventListener('paste', (e) => {
+    e.preventDefault();
+    document.execCommand('insertText', false, e.clipboardData?.getData('text/plain') || '');
+  });
+  ed.addEventListener('keydown', (e) => {
+    if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
+      e.preventDefault();
+      document.execCommand('insertLineBreak');
+    }
+  });
+  ed.addEventListener('click', (e) => {
+    const rm = (e.target as Element).closest('.rm');
+    if (!rm) return;
+    rm.closest('.ch')?.remove();
+    hidePreview();
+    update();
+    ed.focus();
+  });
+  let pointing = false,
+    chain: Element[] = [],
+    level = 0;
+  const cursorStyle = document.createElement('style');
+  cursorStyle.textContent =
+    'html.terrific-pointing, html.terrific-pointing *{cursor:crosshair!important}';
+  function drawHighlight() {
+    const el = chain[level];
+    if (!el) {
+      hl.hidden = true;
+      return;
+    }
+    const r = el.getBoundingClientRect();
+    Object.assign(hl.style, {
+      left: `${r.left - 2}px`,
+      top: `${r.top - 2}px`,
+      width: `${r.width + 4}px`,
+      height: `${r.height + 4}px`,
+    });
+    tag.textContent =
+      el.localName +
+      (el.id
+        ? `#${el.id}`
+        : typeof el.className === 'string' && el.className.trim()
+          ? `.${el.className.trim().split(/\s+/)[0]}`
+          : '');
+    tag.classList.toggle('inside', r.top < 22);
+    hl.hidden = false;
+  }
+  function startPoint() {
+    if (pointing) return;
+    pointing = true;
+    point.el.setAttribute('aria-pressed', 'true');
+    idle.hidden = true;
+    pointingHint.hidden = false;
+    (document.head || document.documentElement).append(cursorStyle);
+    document.documentElement.classList.add('terrific-pointing');
+    for (const [type, fn] of pointerHandlers) window.addEventListener(type, fn, true);
+  }
+  function stopPoint() {
+    if (!pointing) return;
+    pointing = false;
+    point.el.setAttribute('aria-pressed', 'false');
+    idle.hidden = false;
+    pointingHint.hidden = true;
+    hl.hidden = true;
+    chain = [];
+    level = 0;
+    document.documentElement.classList.remove('terrific-pointing');
+    cursorStyle.remove();
+    for (const [type, fn] of pointerHandlers) window.removeEventListener(type, fn, true);
+  }
+  const block = (e: Event) => {
+    if (isOurs(e)) return;
+    e.preventDefault();
+    e.stopImmediatePropagation();
+  };
+  function firstTarget(e: Event): Element | null {
+    const t = e.composedPath()[0];
+    return t instanceof Element ? t : t instanceof Node ? t.parentElement : null;
+  }
+  function pick(el: Element | null) {
+    stopPoint();
+    addElement(el);
+  }
+  const pointerHandlers: [string, EventListener][] = [
+    [
+      'pointermove',
+      (e) => {
+        if (isOurs(e)) {
+          hl.hidden = true;
+          chain = [];
+          return;
+        }
+        const el = firstTarget(e);
+        if (chain[0] === el) return;
+        chain = [];
+        for (let n = el; usable(n); n = n.parentElement) chain.push(n);
+        level = 0;
+        drawHighlight();
+      },
+    ],
+    ['pointerdown', block],
+    ['mousedown', block],
+    ['mouseup', block],
+    ['pointerup', block],
+    [
+      'click',
+      (e) => {
+        if (isOurs(e)) return;
+        e.preventDefault();
+        e.stopImmediatePropagation();
+        pick(chain[level] || firstTarget(e));
+      },
+    ],
+    [
+      'keydown',
+      (e) => {
+        const key = (e as KeyboardEvent).key;
+        if (key === 'Escape') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          stopPoint();
+          ed.focus();
+          return;
+        }
+        if (!chain.length) return;
+        if (key === 'ArrowUp' || key === 'ArrowDown') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          level = clamp(level + (key === 'ArrowUp' ? 1 : -1), 0, chain.length - 1);
+          drawHighlight();
+        } else if (key === 'Enter') {
+          e.preventDefault();
+          e.stopImmediatePropagation();
+          pick(chain[level] || null);
+        }
+      },
+    ],
+    ['scroll', () => drawHighlight()],
+  ];
+  point.el.addEventListener('click', () => {
+    if (pointing) {
+      stopPoint();
+      ed.focus();
+    } else startPoint();
+  });
+  function keepInView() {
+    if (panel.hidden) return;
+    const r = panel.getBoundingClientRect();
+    panel.style.left = `${clamp(r.left, 8, Math.max(8, innerWidth - r.width - 8))}px`;
+    panel.style.top = `${clamp(r.top, 8, Math.max(8, innerHeight - r.height - 8))}px`;
+  }
+  window.addEventListener('resize', keepInView);
+  hd.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0 || (e.target as Element).closest('button')) return;
+    const r = panel.getBoundingClientRect(),
+      dx = e.clientX - r.left,
+      dy = e.clientY - r.top;
+    hd.setPointerCapture(e.pointerId);
+    hd.classList.add('dragging');
+    const move = (ev: PointerEvent) => {
+      panel.style.left = `${clamp(ev.clientX - dx, 8, Math.max(8, innerWidth - r.width - 8))}px`;
+      panel.style.top = `${clamp(ev.clientY - dy, 8, Math.max(8, innerHeight - r.height - 8))}px`;
+    };
+    const up = () => {
+      hd.classList.remove('dragging');
+      moved = true;
+      hd.removeEventListener('pointermove', move);
+      hd.removeEventListener('pointerup', up);
+      hd.removeEventListener('pointercancel', up);
+    };
+    hd.addEventListener('pointermove', move);
+    hd.addEventListener('pointerup', up);
+    hd.addEventListener('pointercancel', up);
+  });
+  function hidePreview() {
+    ref.hidden = true;
+    pop.hidden = true;
+    pop.replaceChildren();
+  }
+  ed.addEventListener('mouseover', (e) => {
+    const chip = (e.target as Element).closest('.ch');
+    if (!chip) return;
+    const data = chipData.get(chip);
+    if (!data) return;
+    if (data.kind === 'element') {
+      if (!data.el.isConnected) return;
+      const r = data.el.getBoundingClientRect();
+      Object.assign(ref.style, {
+        left: `${r.left - 3}px`,
+        top: `${r.top - 3}px`,
+        width: `${r.width + 6}px`,
+        height: `${r.height + 6}px`,
+      });
+      ref.hidden = false;
+      return;
+    }
+    pop.replaceChildren();
+    if (data.kind === 'screenshot') {
+      if (data.preview) {
+        const img = h('img', { src: data.preview, alt: '' }) as HTMLImageElement;
+        const container = h('div', { class: 'im' }, [img]);
+        img.addEventListener('error', () => container.remove());
+        pop.append(container);
+      }
+      pop.append(
+        h('div', { class: 'meta' }, [
+          h('b', {}, [data.label]),
+          h('span', {}, [`${data.width}×${data.height}`]),
+        ]),
+      );
+    } else {
+      pop.append(
+        h('div', { class: 'sn' }, [
+          h('b', {}, [`${data.label} · page scrape`]),
+          h('span', {}, [`${data.title} · ${data.wordCount} words`]),
+          h('div', { class: 'excerpt' }, [`${data.excerpt}…`]),
+        ]),
+      );
+    }
+    pop.hidden = false;
+    const cr = chip.getBoundingClientRect(),
+      pr = pop.getBoundingClientRect();
+    pop.style.left = `${clamp(cr.left + cr.width / 2 - pr.width / 2, 8, innerWidth - pr.width - 8)}px`;
+    pop.style.top = `${cr.top - pr.height - 8 >= 8 ? cr.top - pr.height - 8 : cr.bottom + 8}px`;
+  });
+  ed.addEventListener('mouseout', (e) => {
+    const chip = (e.target as Element).closest('.ch');
+    if (chip && !(e.relatedTarget instanceof Node && chip.contains(e.relatedTarget))) hidePreview();
+  });
+  async function bridge<T>(op: string, payload?: unknown): Promise<T> {
+    const fn = w[bindingName];
+    if (typeof fn !== 'function') throw new Error('Terrific is not connected to this page.');
+    return payload === undefined ? fn(op) : fn(op, payload);
+  }
+  const frame = () =>
+    new Promise<void>((resolve) =>
+      requestAnimationFrame(() => requestAnimationFrame(() => resolve())),
+    );
+  async function capture(kind: 'screenshot' | 'snapshot') {
+    if (busy) return;
+    stopPoint();
+    hideError();
+    hidePreview();
+    const btn = kind === 'screenshot' ? shot : snap,
+      label = btn.text.textContent;
+    busy = true;
+    update();
+    btn.text.textContent = kind === 'screenshot' ? 'Capturing…' : 'Reading page…';
+    try {
+      let chip: HTMLElement;
+      if (kind === 'screenshot') {
+        layer.classList.add('capturing');
+        let res: { file: string; width: number; height: number; preview: string | null };
+        try {
+          await frame();
+          res = await bridge('screenshot');
+        } finally {
+          layer.classList.remove('capturing');
+        }
+        const name = `Screenshot ${++counters.screenshot}`;
+        chip = makeChip({ kind: 'screenshot', label: name, ...res }, name, icons.cam);
+      } else {
+        const res = await bridge<{
+          id: string | null;
+          title: string;
+          wordCount: number;
+          excerpt: string;
+        }>('snapshot');
+        const name = `Snapshot ${++counters.snapshot}`;
+        chip = makeChip({ kind: 'snapshot', label: name, ...res }, name, icons.scan);
+      }
+      busy = false;
+      insertChip(chip);
+    } catch (error) {
+      showError(
+        `${kind === 'screenshot' ? 'Screenshot' : 'Snapshot'} failed: ${error instanceof Error ? error.message : String(error)}`,
+      );
+    } finally {
+      busy = false;
+      btn.text.textContent = label;
+      update();
+    }
+  }
+  shot.el.addEventListener('click', () => {
+    void capture('screenshot');
+  });
+  snap.el.addEventListener('click', () => {
+    void capture('snapshot');
+  });
+  function serialize(node: Node = ed): string {
+    let out = '';
+    for (const n of node.childNodes) {
+      if (n.nodeType === Node.TEXT_NODE) out += (n as Text).data;
+      else if (n.nodeName === 'BR') out += '\n';
+      else if (n instanceof Element && n.classList.contains('ch')) {
+        const d = chipData.get(n);
+        if (!d) continue;
+        if (d.kind === 'element') out += `[element ${d.selector}${d.name ? ` "${d.name}"` : ''}]`;
+        else if (d.kind === 'screenshot') out += `[screenshot ${d.file}]`;
+        else out += d.id ? `[snapshot ${d.id}]` : '[snapshot]';
+      } else out += (n.nodeName === 'DIV' && out && !out.endsWith('\n') ? '\n' : '') + serialize(n);
+    }
+    return out;
+  }
+  function showError(msg: string) {
+    err.textContent = msg;
+    err.hidden = false;
+  }
+  function hideError() {
+    err.hidden = true;
+  }
+  function close() {
+    stopPoint();
+    hidePreview();
+    hideError();
+    panel.hidden = true;
+  }
+  function showToast(kind: 'note' | 'bug') {
+    toast.className = `toast${kind === 'bug' ? ' bug' : ''}`;
+    toast.replaceChildren(
+      svg(kind === 'bug' ? icons.bug : icons.msg),
+      h('span', {}, [`${kind === 'bug' ? 'Bug' : 'Note'} saved to the session`]),
+    );
+    toast.hidden = false;
+    clearTimeout(toastTimer);
+    toastTimer = setTimeout(() => {
+      toast.hidden = true;
+    }, 2600);
+  }
+  async function send(kind: 'note' | 'bug') {
+    if (busy || (kind === 'note' && !hasContent())) return;
+    stopPoint();
+    hideError();
+    hidePreview();
+    const btn = kind === 'bug' ? bug : note;
+    const text = serialize()
+      .replace(/[ \t]+\n/g, '\n')
+      .replace(/\s+$/, '')
+      .replace(/^\s+/, '');
+    busy = true;
+    update();
+    btn.text.textContent = 'Saving…';
+    try {
+      await bridge('submit', { kind, text: text || null });
+      ed.replaceChildren();
+      savedRange = null;
+      close();
+      showToast(kind);
+    } catch (error) {
+      showError(
+        `Not saved: ${error instanceof Error ? error.message : String(error)} Your draft is kept.`,
+      );
+    } finally {
+      busy = false;
+      btn.text.textContent = kind === 'bug' ? 'Bug' : 'Note';
+      update();
+    }
+  }
+  bug.el.addEventListener('click', () => {
+    void send('bug');
+  });
+  note.el.addEventListener('click', () => {
+    void send('note');
+  });
+  closeBtn.addEventListener('click', close);
+  panel.addEventListener('keydown', (e) => {
+    if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+      e.preventDefault();
+      void send(e.shiftKey ? 'bug' : 'note');
+    } else if (e.key === 'Escape' && !pointing) {
+      e.preventDefault();
+      close();
+    }
+  });
+  update();
+  window.addEventListener(
+    'contextmenu',
+    (e) => {
+      if (!e.altKey || isOurs(e)) return;
+      e.preventDefault();
+      e.stopImmediatePropagation();
+      if (!host.isConnected) document.documentElement.append(host);
+      if (pointing) stopPoint();
+      const wasOpen = !panel.hidden;
+      panel.hidden = false;
+      if (!wasOpen && !moved) {
+        const r = panel.getBoundingClientRect();
+        panel.style.left = `${clamp(e.clientX + 12, 8, Math.max(8, innerWidth - r.width - 8))}px`;
+        panel.style.top = `${e.clientY + 12 + r.height <= innerHeight - 8 ? e.clientY + 12 : clamp(e.clientY - r.height - 12, 8, Math.max(8, innerHeight - r.height - 8))}px`;
+      }
+      keepInView();
+      ed.focus({ preventScroll: true });
+      placeCaret(rangeInEditor());
+    },
+    true,
+  );
+};
+
+export function composerScriptSource(bindingName: string): string {
+  return `(${composerScript.toString()})(${JSON.stringify(bindingName)})`;
+}
