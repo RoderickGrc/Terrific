@@ -222,7 +222,14 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
   layer.append(ref, hl, panel, pop, status);
   root.append(layer);
   type Chip =
-    | { kind: 'element'; el: Element | null; selector: string; name: string; tag: string }
+    | {
+        kind: 'element';
+        el: Element | null;
+        selector: string;
+        name: string;
+        tag: string;
+        reference: string;
+      }
     | {
         kind: 'screenshot';
         label: string;
@@ -241,7 +248,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
       };
   type DraftSegment =
     | { type: 'text'; text: string }
-    | { type: 'element'; selector: string; name: string; tag: string }
+    | { type: 'element'; selector: string; name: string; tag: string; reference?: string }
     | { type: 'screenshot'; label: string; file: string; width: number; height: number }
     | {
         type: 'snapshot';
@@ -300,27 +307,248 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
   const isOurs = (e: Event) => e.composedPath().includes(host);
   const usable = (el: Element | null): el is Element =>
     !!el && el !== document.documentElement && el !== document.body && el !== host;
-  function selectorFor(el: Element) {
-    const parts: string[] = [];
-    for (
-      let n: Element | null = el;
-      n && n !== document.body && parts.length < 4;
-      n = n.parentElement
-    ) {
-      if (n.id) {
-        parts.unshift(
-          `${n.localName}#${typeof window.CSS === 'undefined' ? n.id : CSS.escape(n.id)}`,
-        );
-        break;
+  // Point reference, ported from terrific-markdown-extension contextTracker.js (Point to section).
+  // The page URL is left out because the session already records it as navigation events.
+  const visibleText = (el: Element) =>
+    // biome-ignore lint/performance/useDomNodeTextContent: references describe the text the tester sees.
+    el instanceof HTMLElement ? el.innerText : el.textContent || '';
+  const collapse = (value: unknown, max: number) => {
+    const text = String(value || '')
+      .replace(/\s+/g, ' ')
+      .trim();
+    return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+  };
+  const inlineCode = (value: string) => `\`${String(value).replace(/`/g, "'")}\``;
+  const cssEscape = (value: string) =>
+    typeof CSS !== 'undefined' && typeof CSS.escape === 'function'
+      ? CSS.escape(value)
+      : String(value).replace(/[^a-zA-Z0-9_-]/g, '\\$&');
+  const cssEscapeAttr = (value: string) =>
+    String(value).replace(/\\/g, '\\\\').replace(/"/g, '\\"');
+  function composedParent(el: Element): Element | null {
+    if (el.parentElement) return el.parentElement;
+    const scope = el.getRootNode();
+    return scope instanceof ShadowRoot ? scope.host : null;
+  }
+  function describeElement(el: Element) {
+    let label = el.localName;
+    const id = el.getAttribute('id');
+    if (id) label += `#${id}`;
+    else {
+      const firstClass = (el.getAttribute('class') || '').trim().split(/\s+/)[0];
+      if (firstClass) label += `.${firstClass}`;
+    }
+    return label.length > 36 ? `${label.slice(0, 35)}…` : label;
+  }
+  function selectorPart(el: Element) {
+    for (const attr of ['data-testid', 'data-test', 'name', 'aria-label', 'role']) {
+      const value = el.getAttribute(attr);
+      if (value) return `${el.localName}[${attr}="${cssEscapeAttr(value)}"]`;
+    }
+    const parent = el.parentElement;
+    if (!parent) return el.localName;
+    const same = Array.from(parent.children).filter((c) => c.localName === el.localName);
+    return same.length <= 1 ? el.localName : `${el.localName}:nth-of-type(${same.indexOf(el) + 1})`;
+  }
+  function selectorInScope(el: Element) {
+    const scope = el.getRootNode() as Document | ShadowRoot;
+    const unique = (selector: string) => {
+      try {
+        return scope.querySelectorAll(selector).length === 1;
+      } catch {
+        return false;
       }
-      let part = n.localName;
-      const siblings = n.parentElement
-        ? Array.from(n.parentElement.children).filter((c) => c.localName === n?.localName)
-        : [];
-      if (siblings.length > 1) part += `:nth-of-type(${siblings.indexOf(n) + 1})`;
-      parts.unshift(part);
+    };
+    const parts: string[] = [];
+    for (let n: Element | null = el; n; n = n.parentElement) {
+      const id = n.getAttribute('id');
+      if (id && unique(`#${cssEscape(id)}`)) {
+        parts.unshift(`#${cssEscape(id)}`);
+        return parts.join(' > ');
+      }
+      parts.unshift(selectorPart(n));
+      const selector = parts.join(' > ');
+      if (unique(selector)) return selector;
+      if (n === document.documentElement) break;
     }
     return parts.join(' > ');
+  }
+  // Selector without a depth cap; shadow roots are joined with " >>> ".
+  function pointSelector(el: Element) {
+    const segments: string[] = [];
+    for (let n: Element | null = el; n; ) {
+      segments.unshift(selectorInScope(n));
+      const scope = n.getRootNode();
+      n = scope instanceof ShadowRoot ? scope.host : null;
+    }
+    return segments.join(' >>> ');
+  }
+  const LANDMARK_TAGS = new Set([
+    'main',
+    'nav',
+    'header',
+    'footer',
+    'aside',
+    'section',
+    'article',
+    'form',
+    'dialog',
+  ]);
+  const LANDMARK_ROLES = new Set([
+    'main',
+    'navigation',
+    'banner',
+    'contentinfo',
+    'complementary',
+    'region',
+    'article',
+    'form',
+    'search',
+    'dialog',
+    'alertdialog',
+    'tabpanel',
+    'list',
+    'table',
+    'grid',
+  ]);
+  function ariaName(el: Element) {
+    const label = el.getAttribute('aria-label');
+    if (label) return collapse(label, 60);
+    const labelledBy = el.getAttribute('aria-labelledby');
+    if (labelledBy) {
+      const scope = el.getRootNode() as Document | ShadowRoot;
+      const text = labelledBy
+        .split(/\s+/)
+        .map((id) => scope.getElementById?.(id)?.textContent || '')
+        .join(' ');
+      if (text.trim()) return collapse(text, 60);
+    }
+    return '';
+  }
+  function headingText(el: Element) {
+    const heading = el.querySelector('h1, h2, h3, h4, h5, h6, [role="heading"]');
+    return heading ? collapse(heading.textContent, 48) : '';
+  }
+  function landmarkPath(el: Element) {
+    const labels: string[] = [];
+    for (
+      let n: Element | null = el;
+      n && n !== document.body && n !== document.documentElement;
+      n = composedParent(n)
+    ) {
+      const role = n.getAttribute('role') || '';
+      if (!LANDMARK_TAGS.has(n.localName) && !LANDMARK_ROLES.has(role)) continue;
+      const name = ariaName(n) || (n === el ? '' : headingText(n));
+      labels.unshift(name ? `${role || n.localName} "${name}"` : role || n.localName);
+    }
+    return labels.join(' > ');
+  }
+  function nearestHeading(el: Element) {
+    const inside = headingText(el);
+    if (inside) return { text: inside, relation: 'inside' };
+    let found: Element | null = null;
+    for (const heading of document.querySelectorAll('h1, h2, h3, h4, h5, h6, [role="heading"]')) {
+      if (heading.compareDocumentPosition(el) & Node.DOCUMENT_POSITION_FOLLOWING) found = heading;
+    }
+    return found ? { text: collapse(found.textContent, 48), relation: 'before' } : null;
+  }
+  function fixedOrSticky(el: Element) {
+    for (let n: Element | null = el; n; n = composedParent(n)) {
+      const position = getComputedStyle(n).position;
+      if (position === 'fixed' || position === 'sticky') return position;
+    }
+    return '';
+  }
+  const POINT_STYLE_PROPS: [string, string[]][] = [
+    ['display', ['inline', 'none']],
+    ['position', ['static']],
+    ['z-index', ['auto']],
+    ['overflow', ['visible']],
+    ['font-size', []],
+    ['font-weight', ['400']],
+    ['color', []],
+    ['background-color', ['rgba(0, 0, 0, 0)', 'transparent']],
+    ['padding', ['0px']],
+    ['margin', ['0px']],
+    ['border-radius', ['0px']],
+  ];
+  function pointStyles(el: Element) {
+    const style = getComputedStyle(el);
+    const entries: string[] = [];
+    for (const [prop, skip] of POINT_STYLE_PROPS) {
+      const value = style.getPropertyValue(prop).trim();
+      if (value && !skip.includes(value)) entries.push(`${prop}: ${value}`);
+    }
+    return entries.join('; ');
+  }
+  function describeNeighbor(el: Element | null) {
+    if (!el) return '';
+    const text = collapse(visibleText(el), 40);
+    return text ? `${inlineCode(describeElement(el))} "${text}"` : inlineCode(describeElement(el));
+  }
+  // Describes where an element is, never what it contains beyond a short locating anchor.
+  function pointReference(el: Element) {
+    const rect = el.getBoundingClientRect();
+    const lines: string[] = [];
+    const add = (label: string, value: string | false | null | undefined | 0) => {
+      if (value) lines.push(`- ${label}: ${value}`);
+    };
+    const classes = collapse(el.getAttribute('class'), 160);
+    const attrs: string[] = [];
+    for (const attr of Array.from(el.attributes)) {
+      if (!/^data-/.test(attr.name) || attr.name.startsWith('data-terrific')) continue;
+      if (attrs.length >= 6) break;
+      attrs.push(`${attr.name}="${collapse(attr.value, 60)}"`);
+    }
+    const ariaStates = [
+      'aria-expanded',
+      'aria-selected',
+      'aria-checked',
+      'aria-pressed',
+      'aria-current',
+      'aria-disabled',
+      'aria-hidden',
+    ]
+      .map((name) => (el.hasAttribute(name) ? `${name}="${el.getAttribute(name)}"` : ''))
+      .filter(Boolean);
+    const heading = nearestHeading(el);
+    const textAnchor = collapse(visibleText(el), 100);
+    const name = ariaName(el);
+    const role = el.getAttribute('role');
+    const styles = pointStyles(el);
+    add('Selector', inlineCode(pointSelector(el)));
+    add('Element', inlineCode(`<${el.localName}${el.id ? ` id="${el.id}"` : ''}>`));
+    add('Classes', classes && inlineCode(classes));
+    add('Data attributes', attrs.length && inlineCode(attrs.join(' ')));
+    add('Location', landmarkPath(el));
+    add('Heading', heading && `"${heading.text}" (${heading.relation})`);
+    add('Role', role && inlineCode(role));
+    add('Accessible name', name && `"${name}"`);
+    add('ARIA state', ariaStates.length && inlineCode(ariaStates.join(' ')));
+    add('Text anchor', textAnchor && `"${textAnchor}"`);
+    add('Previous sibling', describeNeighbor(el.previousElementSibling));
+    add('Next sibling', describeNeighbor(el.nextElementSibling));
+    add('Children', el.children.length ? String(el.children.length) : '');
+    add(
+      'Box',
+      `${Math.round(rect.width)}×${Math.round(rect.height)} at page (${Math.round(rect.left + window.scrollX)}, ${Math.round(rect.top + window.scrollY)}), viewport ${window.innerWidth}×${window.innerHeight}`,
+    );
+    add('Positioning', fixedOrSticky(el));
+    add('Styles', styles && inlineCode(styles));
+    add(
+      'Shadow DOM',
+      el.getRootNode() instanceof ShadowRoot ? 'yes, selector pierces with `>>>`' : '',
+    );
+    return ['<pointed-section>', ...lines, '</pointed-section>'].join('\n');
+  }
+  // Minimal reference for element chips restored without one (drafts from before references existed).
+  function fallbackReference(selector: string, tag: string) {
+    return [
+      '<pointed-section>',
+      `- Selector: ${inlineCode(selector)}`,
+      `- Element: ${inlineCode(`<${tag}>`)}`,
+      '</pointed-section>',
+    ].join('\n');
   }
   function accessibleName(el: Element) {
     const labelled = 'labels' in el ? (el as HTMLInputElement).labels?.[0] : null;
@@ -383,7 +611,17 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
   }
   function resolveElement(selector: string): Element | null {
     try {
-      const found = document.querySelector(selector);
+      const parts = selector.split(' >>> ');
+      let scope: Document | ShadowRoot = document;
+      let found: Element | null = null;
+      for (let i = 0; i < parts.length; i++) {
+        found = scope.querySelector(parts[i] ?? '');
+        if (!found) return null;
+        if (i < parts.length - 1) {
+          if (!found.shadowRoot) return null;
+          scope = found.shadowRoot;
+        }
+      }
       if (!found || found === host || host.contains(found)) return null;
       return found;
     } catch {
@@ -403,7 +641,8 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
   function insertChip(chip: HTMLElement) {
     ed.focus({ preventScroll: true });
     const r = rangeInEditor();
-    r.deleteContents();
+    // Insert after any selected text instead of replacing it.
+    r.collapse(false);
     const after = document.createTextNode(' '),
       frag = document.createDocumentFragment();
     if (needsLeadingSpace(r)) frag.append(' ');
@@ -435,9 +674,16 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
   }
   function addElement(el: Element | null) {
     if (!usable(el)) return;
-    const selector = selectorFor(el);
     const chip = makeChip(
-      { kind: 'element', el, selector, name: accessibleName(el), tag: el.localName },
+      {
+        kind: 'element',
+        el,
+        selector: pointSelector(el),
+        name: accessibleName(el),
+        tag: el.localName,
+        // Captured at pick time so the box and styles describe what the tester saw.
+        reference: pointReference(el),
+      },
       `<${el.localName}>`,
     );
     insertChip(chip);
@@ -453,9 +699,42 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     dirty = true;
     scheduleSave();
   });
+  // Copy and cut put two formats on the clipboard: the text form (pointed-section, @ss_, @snapshot:)
+  // for pasting anywhere, and the full segments so pasting back into a panel restores identical chips.
+  function copySelection(e: ClipboardEvent, cut: boolean) {
+    const s = selection();
+    if (!s?.rangeCount || !e.clipboardData) return;
+    const range = s.getRangeAt(0);
+    if (range.collapsed || !ed.contains(range.commonAncestorContainer)) return;
+    const segments = buildSegments(range);
+    e.preventDefault();
+    e.clipboardData.setData('text/plain', serializeSegments(segments));
+    e.clipboardData.setData(SEGMENTS_MIME, JSON.stringify(segments));
+    if (cut) document.execCommand('delete');
+  }
+  ed.addEventListener('copy', (e) => copySelection(e, false));
+  ed.addEventListener('cut', (e) => copySelection(e, true));
   ed.addEventListener('paste', (e) => {
     e.preventDefault();
-    document.execCommand('insertText', false, e.clipboardData?.getData('text/plain') || '');
+    const data = e.clipboardData;
+    if (!data) return;
+    let segments: DraftSegment[] | null = null;
+    const rich = data.getData(SEGMENTS_MIME);
+    if (rich) {
+      try {
+        segments = cleanSegments(JSON.parse(rich));
+      } catch {
+        segments = null;
+      }
+    }
+    const text = data.getData('text/plain') || '';
+    segments ??= parseTokens(text);
+    if (segments.every((s) => s.type === 'text')) {
+      // Plain text keeps the browser's own insertion, including undo.
+      document.execCommand('insertText', false, text);
+      return;
+    }
+    insertSegments(segments);
   });
   ed.addEventListener('keydown', (e) => {
     if (e.key === 'Enter' && !e.ctrlKey && !e.metaKey && !e.shiftKey) {
@@ -660,18 +939,27 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
         img.addEventListener('error', () => container.remove());
         pop.append(container);
       }
+      const fileName = data.file.replace(/^screenshots\//, '');
       pop.append(
         h('div', { class: 'meta' }, [
           h('b', {}, [data.label]),
-          h('span', {}, [`${data.width}×${data.height}`]),
+          // Pasted chips only know the file, not the capture size.
+          h('span', {}, [data.width > 0 ? `${data.width}×${data.height}` : fileName]),
+        ]),
+      );
+    } else if (data.title) {
+      pop.append(
+        h('div', { class: 'sn' }, [
+          h('b', {}, [`${data.label} · page scrape`]),
+          h('span', {}, [`${data.title} · ${data.wordCount} words`]),
+          h('div', { class: 'excerpt' }, [`${data.excerpt}…`]),
         ]),
       );
     } else {
       pop.append(
         h('div', { class: 'sn' }, [
           h('b', {}, [`${data.label} · page scrape`]),
-          h('span', {}, [`${data.title} · ${data.wordCount} words`]),
-          h('div', { class: 'excerpt' }, [`${data.excerpt}…`]),
+          h('span', {}, [data.id ?? '']),
         ]),
       );
     }
@@ -775,18 +1063,139 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
   snap.el.addEventListener('click', () => {
     void capture('snapshot');
   });
-  function serialize(node: Node = ed): string {
+  // Text form of a draft, used for the stored note and for the clipboard:
+  // elements as a <pointed-section> block, screenshots as @ss_<id>.png, snapshots as @snapshot:<event id>.
+  function segmentText(segment: DraftSegment): string {
+    if (segment.type === 'text') return segment.text;
+    if (segment.type === 'element') {
+      return segment.reference || fallbackReference(segment.selector, segment.tag);
+    }
+    if (segment.type === 'screenshot') return `@${segment.file.replace(/^screenshots\//, '')}`;
+    return segment.id ? `@snapshot:${segment.id}` : '@snapshot';
+  }
+  // Element blocks sit on their own lines; a line break is added only where the text lacks one.
+  function serializeSegments(segments: DraftSegment[]): string {
     let out = '';
-    for (const n of node.childNodes) {
-      if (n.nodeType === Node.TEXT_NODE) out += (n as Text).data;
-      else if (n.nodeName === 'BR') out += '\n';
-      else if (n instanceof Element && n.classList.contains('ch')) {
-        const d = chipData.get(n);
-        if (!d) continue;
-        if (d.kind === 'element') out += `[element ${d.selector}${d.name ? ` "${d.name}"` : ''}]`;
-        else if (d.kind === 'screenshot') out += `[screenshot ${d.file}]`;
-        else out += d.id ? `[snapshot ${d.id}]` : '[snapshot]';
-      } else out += (n.nodeName === 'DIV' && out && !out.endsWith('\n') ? '\n' : '') + serialize(n);
+    let afterBlock = false;
+    for (const segment of segments) {
+      let piece = segmentText(segment);
+      if (segment.type === 'element') {
+        out = out.replace(/[ \t]+$/, '');
+        if (out && !out.endsWith('\n')) out += '\n';
+        out += piece;
+        afterBlock = true;
+        continue;
+      }
+      if (afterBlock) {
+        piece = piece.replace(/^[ \t]+/, '');
+        if (!piece) continue;
+        if (!piece.startsWith('\n')) piece = `\n${piece}`;
+        afterBlock = false;
+      }
+      out += piece;
+    }
+    return out.replace(/[ \t]+\n/g, '\n').trim();
+  }
+  const SEGMENTS_MIME = 'application/x-terrific-segments+json';
+  const TOKEN_RE =
+    /(?:<page-reference\b[^>]*>\s*)?<pointed-section>([\s\S]*?)<\/pointed-section>(?:\s*<\/page-reference>)?|@ss_[A-Za-z0-9_-]+\.png|@snapshot:ev_[A-Za-z0-9_-]+/g;
+  // Turns one pasted token into a chip segment; anything malformed stays plain text.
+  function tokenSegment(token: string, body: string | undefined): DraftSegment | null {
+    if (body !== undefined) {
+      const selector = /^- Selector: `([^`]+)`/m.exec(body)?.[1];
+      const tag = /^- Element: `<([a-z][a-z0-9-]*)/m.exec(body)?.[1];
+      const reference = `<pointed-section>${body}</pointed-section>`;
+      if (!selector || !tag || selector.length > 2000 || reference.length > 8000) return null;
+      const name =
+        /^- Accessible name: "(.*)"$/m.exec(body)?.[1] ||
+        /^- Heading: "(.*)" \(/m.exec(body)?.[1] ||
+        '';
+      return { type: 'element', selector, tag, name: name.slice(0, 40), reference };
+    }
+    if (token.startsWith('@ss_')) {
+      return {
+        type: 'screenshot',
+        label: 'Screenshot',
+        file: `screenshots/${token.slice(1)}`,
+        width: 0,
+        height: 0,
+      };
+    }
+    const id = token.slice('@snapshot:'.length);
+    return { type: 'snapshot', label: 'Snapshot', id, title: '', wordCount: 0, excerpt: '' };
+  }
+  function parseTokens(text: string): DraftSegment[] {
+    const segments: DraftSegment[] = [];
+    let last = 0;
+    for (const match of text.matchAll(TOKEN_RE)) {
+      const segment = tokenSegment(match[0], match[1]);
+      if (!segment) continue;
+      const index = match.index ?? 0;
+      if (index > last) segments.push({ type: 'text', text: text.slice(last, index) });
+      segments.push(segment);
+      last = index + match[0].length;
+    }
+    if (last < text.length) segments.push({ type: 'text', text: text.slice(last) });
+    return segments;
+  }
+  // Re-validates segments read from the clipboard; returns null if anything does not fit the draft model.
+  function cleanSegments(value: unknown): DraftSegment[] | null {
+    if (!Array.isArray(value) || value.length > 200) return null;
+    const str = (v: unknown, max = 2000) => typeof v === 'string' && v.length <= max;
+    const num = (v: unknown) => typeof v === 'number' && Number.isFinite(v);
+    const out: DraftSegment[] = [];
+    for (const s of value) {
+      if (!s || typeof s !== 'object') return null;
+      const v = s as Record<string, unknown>;
+      if (v.type === 'text' && str(v.text, 20000))
+        out.push({ type: 'text', text: v.text as string });
+      else if (
+        v.type === 'element' &&
+        str(v.selector) &&
+        str(v.name) &&
+        typeof v.tag === 'string' &&
+        /^[a-z][a-z0-9-]*$/.test(v.tag) &&
+        (v.reference === undefined || str(v.reference, 8000))
+      )
+        out.push({
+          type: 'element',
+          selector: v.selector as string,
+          name: v.name as string,
+          tag: v.tag,
+          reference: v.reference as string | undefined,
+        });
+      else if (
+        v.type === 'screenshot' &&
+        str(v.label) &&
+        typeof v.file === 'string' &&
+        /^screenshots\/ss_[A-Za-z0-9_-]+\.png$/.test(v.file) &&
+        num(v.width) &&
+        num(v.height)
+      )
+        out.push({
+          type: 'screenshot',
+          label: v.label as string,
+          file: v.file,
+          width: v.width as number,
+          height: v.height as number,
+        });
+      else if (
+        v.type === 'snapshot' &&
+        str(v.label) &&
+        (v.id === null || str(v.id)) &&
+        str(v.title) &&
+        num(v.wordCount) &&
+        str(v.excerpt)
+      )
+        out.push({
+          type: 'snapshot',
+          label: v.label as string,
+          id: v.id as string | null,
+          title: v.title as string,
+          wordCount: v.wordCount as number,
+          excerpt: v.excerpt as string,
+        });
+      else return null;
     }
     return out;
   }
@@ -806,7 +1215,8 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     if (!Number.isFinite(leftN) || !Number.isFinite(topN)) return null;
     return { left: leftN, top: topN };
   }
-  function buildSegments(): DraftSegment[] {
+  // Segments of the whole editor, or only of the part inside `range` (for copy and cut).
+  function buildSegments(range?: Range): DraftSegment[] {
     const segments: DraftSegment[] = [];
     let text = '';
     const flush = () => {
@@ -814,10 +1224,17 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
       segments.push({ type: 'text', text });
       text = '';
     };
+    const outside = (n: Node) => range !== undefined && !range.intersectsNode(n);
     const walk = (node: Node) => {
       for (const n of node.childNodes) {
+        if (outside(n)) continue;
         if (n.nodeType === Node.TEXT_NODE) {
-          text += (n as Text).data;
+          let data = (n as Text).data;
+          if (range) {
+            const end = n === range.endContainer ? range.endOffset : data.length;
+            data = data.slice(n === range.startContainer ? range.startOffset : 0, end);
+          }
+          text += data;
           continue;
         }
         if (n.nodeName === 'BR') {
@@ -834,6 +1251,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
               selector: d.selector,
               name: d.name,
               tag: d.tag,
+              reference: d.reference,
             });
           } else if (d.kind === 'screenshot') {
             segments.push({
@@ -905,38 +1323,34 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     }
     keepInView();
   }
-  function appendTextSegment(value: string) {
-    const parts = value.split('\n');
-    for (let i = 0; i < parts.length; i++) {
-      if (i > 0) ed.append(document.createElement('br'));
-      const part = parts[i];
-      if (part) ed.append(part);
+  // DOM nodes for one segment. Spacing lives in the text segments, so nothing is added around chips.
+  function segmentNodes(segment: DraftSegment & { preview?: string | null }): Node[] {
+    if (segment.type === 'text') {
+      const nodes: Node[] = [];
+      segment.text.split('\n').forEach((part, i) => {
+        if (i > 0) nodes.push(document.createElement('br'));
+        if (part) nodes.push(document.createTextNode(part));
+      });
+      return nodes;
     }
-  }
-  function applyDraft(draft: DraftWithPreviews) {
-    ed.replaceChildren();
-    savedRange = null;
-    for (const segment of draft.segments) {
-      if (segment.type === 'text') {
-        appendTextSegment(segment.text);
-        continue;
-      }
-      if (segment.type === 'element') {
-        const chip = makeChip(
+    if (segment.type === 'element') {
+      return [
+        makeChip(
           {
             kind: 'element',
             el: null,
             selector: segment.selector,
             name: segment.name,
             tag: segment.tag,
+            reference: segment.reference || fallbackReference(segment.selector, segment.tag),
           },
           `<${segment.tag}>`,
-        );
-        ed.append(chip, document.createTextNode(' '));
-        continue;
-      }
-      if (segment.type === 'screenshot') {
-        const chip = makeChip(
+        ),
+      ];
+    }
+    if (segment.type === 'screenshot') {
+      return [
+        makeChip(
           {
             kind: 'screenshot',
             label: segment.label,
@@ -947,11 +1361,11 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
           },
           segment.label,
           icons.cam,
-        );
-        ed.append(chip, document.createTextNode(' '));
-        continue;
-      }
-      const chip = makeChip(
+        ),
+      ];
+    }
+    return [
+      makeChip(
         {
           kind: 'snapshot',
           label: segment.label,
@@ -962,11 +1376,34 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
         },
         segment.label,
         icons.scan,
-      );
-      ed.append(chip, document.createTextNode(' '));
-    }
+      ),
+    ];
+  }
+  function applyDraft(draft: DraftWithPreviews) {
+    ed.replaceChildren(...draft.segments.flatMap(segmentNodes));
+    savedRange = null;
     moved = draft.moved;
     update();
+  }
+  // Pasted segments replace the selection, like any paste.
+  function insertSegments(segments: DraftSegment[]) {
+    ed.focus({ preventScroll: true });
+    const r = rangeInEditor();
+    r.deleteContents();
+    const nodes = segments.flatMap(segmentNodes);
+    const lastNode = nodes[nodes.length - 1];
+    if (!lastNode) return;
+    const frag = document.createDocumentFragment();
+    frag.append(...nodes);
+    r.insertNode(frag);
+    const caret = document.createRange();
+    caret.setStartAfter(lastNode);
+    caret.collapse(true);
+    placeCaret(caret);
+    hideError();
+    update();
+    dirty = true;
+    saveDraftNow();
   }
   async function loadAndApplyDraft(): Promise<DraftWithPreviews | null> {
     if (dirty) return null;
@@ -1016,10 +1453,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     hidePreview();
     cancelPendingSave();
     const btn = kind === 'bug' ? bug : note;
-    const text = serialize()
-      .replace(/[ \t]+\n/g, '\n')
-      .replace(/\s+$/, '')
-      .replace(/^\s+/, '');
+    const text = serializeSegments(buildSegments());
     busy = true;
     update();
     btn.text.textContent = 'Saving…';

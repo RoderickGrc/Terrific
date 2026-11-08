@@ -20,7 +20,7 @@ export type ComposerSubmitResult = {
 
 export type ComposerSegment =
   | { type: 'text'; text: string }
-  | { type: 'element'; selector: string; name: string; tag: string }
+  | { type: 'element'; selector: string; name: string; tag: string; reference?: string }
   | { type: 'screenshot'; label: string; file: string; width: number; height: number }
   | {
       type: 'snapshot';
@@ -61,6 +61,7 @@ export type ComposerBridgeDeps = {
 const MAX_TEXT = 20_000;
 const MAX_SEGMENTS = 200;
 const MAX_STRING = 2_000;
+const MAX_REFERENCE = 8_000;
 const FILE_RE = /^screenshots\/ss_[A-Za-z0-9_-]+\.png$/;
 const TAG_RE = /^[a-z][a-z0-9-]*$/;
 
@@ -92,12 +93,16 @@ function parseSegment(value: unknown): ComposerSegment {
   if (type === 'element') {
     const tag = requireString(value.tag);
     if (!TAG_RE.test(tag)) unsupported();
-    return {
+    const segment: ComposerSegment = {
       type: 'element',
       selector: requireString(value.selector),
       name: requireString(value.name),
       tag,
     };
+    // The <pointed-section> block the page captured when the element was picked.
+    if (value.reference !== undefined)
+      segment.reference = requireString(value.reference, MAX_REFERENCE);
+    return segment;
   }
   if (type === 'screenshot') {
     const file = requireString(value.file);

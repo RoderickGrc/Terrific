@@ -452,3 +452,21 @@ test('handleComposerRequest clears draft only after successful submit', async ()
   );
   deepEqual(failed, []);
 });
+
+test('parseComposerDraft keeps an element reference and rejects an oversized one', () => {
+  const reference =
+    '<pointed-section>\n- Selector: `#email`\n- Element: `<input id="email">`\n</pointed-section>';
+  const element = { type: 'element', selector: '#email', name: 'Email', tag: 'input' };
+  const base = { open: true, position: null, moved: false };
+  const parsed = parseComposerDraft({ ...base, segments: [{ ...element, reference }] });
+  deepEqual(parsed.segments[0], { ...element, reference });
+  const withoutReference = parseComposerDraft({ ...base, segments: [element] });
+  deepEqual(withoutReference.segments[0], element);
+  let error: unknown;
+  try {
+    parseComposerDraft({ ...base, segments: [{ ...element, reference: 'x'.repeat(8_001) }] });
+  } catch (caught) {
+    error = caught;
+  }
+  equal(error instanceof Error ? error.message : '', 'Unsupported composer request.');
+});

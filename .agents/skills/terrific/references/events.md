@@ -54,8 +54,10 @@ In any browser Terrific records, hold Alt and right-click to open the Note panel
 
 Note panel notes and bugs are stored as normal `note` / `bug` events with `author: 'tester'`. Chips serialize into the event text as:
 
-- `[element SELECTOR "NAME"]` (name optional): use the CSS selector to locate the element in the page or app code.
-- `[screenshot screenshots/ss_<id>.png]`: path relative to the session folder; open that file under `screenshots/`.
-- `[snapshot ev_<id>]`: id of the `snapshot` event in `events.jsonl` (or `[snapshot]` when no id was available). Read with `terrific events <session-id> --type snapshot --json` and match the record whose `id` is that `ev_<id>`.
+- A `<pointed-section>` block on its own lines for each pointed element, captured when it was picked. It lists `Selector` (unique CSS selector; shadow roots are joined with ` >>> `), `Element`, and when present `Classes`, `Data attributes`, `Location` (landmark path), `Heading`, `Role`, `Accessible name`, `ARIA state`, `Text anchor`, siblings, `Children`, `Box` (size and page position, plus the viewport), `Positioning`, `Styles` and `Shadow DOM`. It describes where the element is, not its content. The page URL is not repeated: take it from the nearest `navigation` event before the note.
+- `@ss_<id>.png`: a screenshot; open `screenshots/ss_<id>.png` in the session folder.
+- `@snapshot:ev_<id>`: the id of a `snapshot` event (or `@snapshot` when no id was available). Read with `terrific events <session-id> --type snapshot --json` and match the record whose `id` is that `ev_<id>`.
+
+Captures happen when the tester presses Screenshot or Snapshot, so each one is also its own event in the timeline, and a capture may exist that no note references. Copying from the panel puts this same text on the clipboard, and pasting it back turns valid references into chips again.
 
 Limitations: the draft (unsent text and chips) lives in memory for the whole session, survives reloads, navigation and new tabs, and is discarded when the session stops; nothing is written to disk until it is sent. Screenshot previews can be blocked by a page's image CSP (the chip still works); iframes and closed shadow roots cannot be pointed into from the top frame.

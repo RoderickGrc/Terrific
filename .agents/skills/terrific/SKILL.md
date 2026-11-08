@@ -51,7 +51,7 @@ A validation that fails with no evident cause becomes a debug task, and its sess
    - If you can reproduce the bug yourself (a test, a script, `curl`), do it without asking the user.
    - Otherwise give the user short numbered steps and wait until they confirm they are done. Mention restarts only when the instrumentation needs one.
    - While the session runs, mark moments yourself with `terrific note|bug|flag <id> [text]`.
-   - In a browser session, `terrific screenshot <id>` captures the page and `terrific snapshot <id>` saves it as markdown. Alt+right-click opens an in-page composer; chip tokens are under "Notes written in the browser" in [references/events.md](references/events.md).
+   - In a browser session, `terrific screenshot <id>` captures the page and `terrific snapshot <id>` saves it as markdown. Alt+right-click opens the Note panel; how to read its `<pointed-section>`, `@ss_` and `@snapshot:` references is under "Notes written in the browser" in [references/events.md](references/events.md).
    - To watch live, run `terrific events <id> --follow` in the background. It ends when the session stops.
 7. Stop with `terrific stop <id>`, which prints the summary and writes `context.txt` in the session folder. Omit the id when only one session is recording.
    - "Session is not recording" means the user already stopped it, so go straight to the evidence.

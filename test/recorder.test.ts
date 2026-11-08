@@ -388,7 +388,7 @@ test('composer Point tool submits a note without recording composer actions', {
     equal(notes.length, 1);
     if (notes[0]?.kind === 'note') {
       equal(notes[0].author, 'tester');
-      match(notes[0].text, /\[element /);
+      match(notes[0].text, /<pointed-section>\n- Selector: `[^`]+`\n- Element: `<[a-z]/);
       match(notes[0].text, /typed note body/);
     }
     const actionsAfter = collected.events.filter((event) => event.kind === 'action').length;
@@ -441,8 +441,8 @@ test('composer Screenshot and Snapshot tools append captures and store a bug wit
     equal(bugs.length, 1);
     if (bugs[0]?.kind === 'bug') {
       equal(bugs[0].author, 'tester');
-      match(bugs[0].text ?? '', /\[screenshot screenshots\/ss_/);
-      match(bugs[0].text ?? '', /\[snapshot ev_test_/);
+      match(bugs[0].text ?? '', /@ss_[A-Za-z0-9_-]+\.png/);
+      match(bugs[0].text ?? '', /@snapshot:ev_test_/);
     }
   } finally {
     await recording.stop();
@@ -554,6 +554,7 @@ test('composer draft survives reload with chips and without stealing focus', {
     await page.locator('#email').click();
     await page.locator('terrific-composer .tl', { hasText: 'Screenshot' }).click();
     await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'screenshot'));
+    await page.locator('terrific-composer .ch.cap').waitFor();
     equal(await page.locator('terrific-composer .ch.el').count(), 1);
     equal(await page.locator('terrific-composer .ch.cap').count(), 1);
 
@@ -604,6 +605,7 @@ test('composer draft survives navigation and marks missing element chips gone', 
     await page.locator('#email').click();
     await page.locator('terrific-composer .tl', { hasText: 'Screenshot' }).click();
     await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'screenshot'));
+    await page.locator('terrific-composer .ch.cap').waitFor();
 
     await page.goto(`${site.url}/page2.html`, { waitUntil: 'domcontentloaded' });
     await page.locator('terrific-composer .panel').waitFor({ state: 'visible' });
@@ -646,6 +648,8 @@ test('composer submit after reload clears the draft for the next open', {
     await page.locator('#email').click();
     await page.locator('terrific-composer .tl', { hasText: 'Screenshot' }).click();
     await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'screenshot'));
+    // The event lands before the page receives the result; reload only once the chip exists.
+    await page.locator('terrific-composer .ch.cap').waitFor();
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('terrific-composer .panel').waitFor({ state: 'visible' });
@@ -656,8 +660,8 @@ test('composer submit after reload clears the draft for the next open', {
     equal(notes.length, 1);
     if (notes[0]?.kind === 'note') {
       match(notes[0].text, /submit after reload/);
-      match(notes[0].text, /\[element /);
-      match(notes[0].text, /\[screenshot screenshots\/ss_/);
+      match(notes[0].text, /<pointed-section>\n- Selector: `[^`]+`\n- Element: `<[a-z]/);
+      match(notes[0].text, /@ss_[A-Za-z0-9_-]+\.png/);
     }
 
     await page.reload({ waitUntil: 'domcontentloaded' });
@@ -754,6 +758,127 @@ test('composer screenshot labels continue across reload', {
       labels.some((label) => /Screenshot 2/.test(label)),
       true,
     );
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});
+
+test('composer inserts a capture after selected text instead of replacing it', {
+  timeout: 60_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: false, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await openComposer(page);
+    await page.locator('terrific-composer .ed').click();
+    await page.keyboard.type('keep this text');
+    await page.keyboard.press('Control+A');
+    await page.locator('terrific-composer .tl', { hasText: 'Snapshot' }).click();
+    await page.locator('terrific-composer .ch').waitFor();
+    match((await page.locator('terrific-composer .ed').textContent()) ?? '', /keep this text/);
+    equal(await page.locator('terrific-composer .ch').count(), 1);
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});
+
+test('composer copies chips as references and pastes them back as chips', {
+  timeout: 60_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: false, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await openComposer(page);
+    await page.locator('terrific-composer .tl', { hasText: 'Point' }).click();
+    await page.locator('#email').click();
+    await page.keyboard.type('after');
+    await page.keyboard.press('Control+A');
+
+    const copied = await page.evaluate(() => {
+      const ed = document.querySelector('terrific-composer')?.shadowRoot?.querySelector('.ed');
+      const data = new DataTransfer();
+      ed?.dispatchEvent(
+        new ClipboardEvent('copy', { clipboardData: data, bubbles: true, cancelable: true }),
+      );
+      return {
+        text: data.getData('text/plain'),
+        rich: data.getData('application/x-terrific-segments+json'),
+      };
+    });
+    match(copied.text, /^<pointed-section>\n- Selector: `#email`\n- Element: `<input id="email">`/);
+    match(copied.text, /<\/pointed-section>\nafter$/);
+    const rich = JSON.parse(copied.rich) as { type: string; reference?: string }[];
+    equal(rich[0]?.type, 'element');
+    match(rich[0]?.reference ?? '', /^<pointed-section>/);
+
+    const paste = (text: string, richData?: string) =>
+      page.evaluate(
+        ([plain, segments]) => {
+          const ed = document.querySelector('terrific-composer')?.shadowRoot?.querySelector('.ed');
+          const data = new DataTransfer();
+          data.setData('text/plain', plain ?? '');
+          if (segments) data.setData('application/x-terrific-segments+json', segments);
+          ed?.dispatchEvent(
+            new ClipboardEvent('paste', { clipboardData: data, bubbles: true, cancelable: true }),
+          );
+        },
+        [text, richData] as const,
+      );
+
+    // Rich paste restores the identical element chip.
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Delete');
+    await paste(copied.text, copied.rich);
+    equal(await page.locator('terrific-composer .ch.el').count(), 1);
+
+    // Plain text tokens become chips; malformed tokens stay text.
+    await page.keyboard.press('Control+A');
+    await page.keyboard.press('Delete');
+    await paste(
+      'see\n<pointed-section>\n- Selector: `#color`\n- Element: `<select id="color">`\n</pointed-section>\n@ss_abc123.png @snapshot:ev_xyz789 bad @ss_../x.png',
+    );
+    equal(await page.locator('terrific-composer .ch').count(), 3);
+    await page.keyboard.press('Control+Enter');
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'note'));
+    const note = collected.events.find((event) => event.kind === 'note');
+    if (note?.kind === 'note') {
+      match(note.text, /^see\n<pointed-section>\n- Selector: `#color`/);
+      match(note.text, /@ss_abc123\.png @snapshot:ev_xyz789 bad @ss_\.\.\/x\.png$/);
+    } else {
+      ok(false, 'expected a note');
+    }
   } finally {
     await recording.stop();
     await site.close();
