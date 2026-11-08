@@ -184,6 +184,7 @@ export function createSessionService(options: {
           onEvent: (input) => {
             void appendInput(live, input, stamp);
           },
+          appendEvent: async (input) => ({ id: (await appendInput(live, input, stamp)).id }),
         });
         void live.recording.closed.then((reason) => {
           if (reason === 'browser-closed') void stop(created.record.id, undefined, true);

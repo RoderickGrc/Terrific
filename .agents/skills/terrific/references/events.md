@@ -47,3 +47,17 @@ The session folder, printed by `start` and `prompt`, contains:
 - `events.jsonl`, the lossless source of truth, so grep it directly when filters fall short;
 - `context.txt`, written when the session stops;
 - `screenshots/`.
+
+## Notes written in the browser
+
+In any browser Terrific records, hold Alt and right-click to open the Note panel (plain right-click is untouched; works when action recording is off; top frame only). Point adds the clicked element as a chip (Up/Down change level, Enter or click to add, Esc cancels). Screenshot and Snapshot capture the page into the session and add a chip. Note saves with Ctrl+Enter, Bug with Ctrl+Shift+Enter; a bug can be empty. Esc closes and keeps the draft.
+
+Note panel notes and bugs are stored as normal `note` / `bug` events with `author: 'tester'`. Chips serialize into the event text as:
+
+- A `<pointed-section>` block on its own lines for each pointed element, captured when it was picked. It lists `Selector` (unique CSS selector; shadow roots are joined with ` >>> `), `Element`, and when present `Classes`, `Data attributes`, `Location` (landmark path), `Heading`, `Role`, `Accessible name`, `ARIA state`, `Text anchor`, siblings, `Children`, `Box` (size and page position, plus the viewport), `Positioning`, `Styles` and `Shadow DOM`. It describes where the element is, not its content. The page URL is not repeated: take it from the nearest `navigation` event before the note.
+- `@ss_<id>.png`: a screenshot; open `screenshots/ss_<id>.png` in the session folder.
+- `@snapshot:ev_<id>`: the id of a `snapshot` event (or `@snapshot` when no id was available). Read with `terrific events <session-id> --type snapshot --json` and match the record whose `id` is that `ev_<id>`.
+
+Captures happen when the tester presses Screenshot or Snapshot, so each one is also its own event in the timeline, and a capture may exist that no note references. Copying from the panel puts this same text on the clipboard, and pasting it back turns valid references into chips again.
+
+Limitations: the draft (unsent text and chips) lives in memory for the whole session, survives reloads, navigation and new tabs, and is discarded when the session stops; nothing is written to disk until it is sent. Screenshot previews can be blocked by a page's image CSP (the chip still works); iframes and closed shadow roots cannot be pointed into from the top frame.

@@ -6,6 +6,10 @@ The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 
 ## [Unreleased]
 
+### Added
+
+- Browser note panel: Alt+right-click in a recorded page to write notes and bugs with element, screenshot, and snapshot chips. Unsent drafts survive reloads and navigation for the rest of the session.
+
 ## [1.0.0] - 2026-11-04
 
 ### Fixed

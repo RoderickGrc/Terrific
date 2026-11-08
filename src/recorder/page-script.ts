@@ -222,9 +222,17 @@ export const pageScript: (bindingName: string) => void = function pageScript(bin
     return '';
   }
 
+  function fromComposer(event: Event) {
+    for (const node of event.composedPath()) {
+      if (node instanceof Element && node.localName === 'terrific-composer') return true;
+    }
+    return false;
+  }
+
   document.addEventListener(
     'click',
     (event) => {
+      if (fromComposer(event)) return;
       const raw = event.target;
       if (!(raw instanceof Node)) return;
       const node = raw instanceof Element ? raw : raw.parentElement;
@@ -238,6 +246,7 @@ export const pageScript: (bindingName: string) => void = function pageScript(bin
   document.addEventListener(
     'input',
     (event) => {
+      if (fromComposer(event)) return;
       const el = event.target;
       if (!(el instanceof Element) || inputKind(el) !== 'text') return;
       if (isPassword(el)) {
@@ -252,6 +261,7 @@ export const pageScript: (bindingName: string) => void = function pageScript(bin
   document.addEventListener(
     'blur',
     (event) => {
+      if (fromComposer(event)) return;
       const el = event.target;
       if (el instanceof Element) flushInput(el);
     },
@@ -261,6 +271,7 @@ export const pageScript: (bindingName: string) => void = function pageScript(bin
   document.addEventListener(
     'change',
     (event) => {
+      if (fromComposer(event)) return;
       const el = event.target;
       if (!el) return;
       if (el instanceof HTMLSelectElement) {
@@ -280,6 +291,7 @@ export const pageScript: (bindingName: string) => void = function pageScript(bin
   document.addEventListener(
     'submit',
     (event) => {
+      if (fromComposer(event)) return;
       const el = event.target;
       if (el instanceof Element) emit('submit', el, null);
     },
