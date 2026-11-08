@@ -52,6 +52,7 @@ export const composerScript: (bindingName: string) => void = function composerSc
       'M4.04 4.69a.5.5 0 0 1 .65-.65l16 6.5a.5.5 0 0 1-.06.95l-6.12 1.58a2 2 0 0 0-1.44 1.44l-1.58 6.12a.5.5 0 0 1-.95.07z',
     ],
     x: ['M18 6 6 18M6 6l12 12'],
+    check: ['M20 6 9 17l-5-5'],
   };
   const css = `
 :host{all:initial}
@@ -59,10 +60,14 @@ export const composerScript: (bindingName: string) => void = function composerSc
 [hidden]{display:none!important}
 .layer{position:fixed;inset:0;pointer-events:none;z-index:2147483646;font:500 13px/1.4 Inter,system-ui,"Segoe UI",sans-serif;color:#e4e4e7;-webkit-font-smoothing:antialiased}
 .layer.capturing{visibility:hidden}
+.sr{position:absolute;width:1px;height:1px;overflow:hidden;clip-path:inset(50%);white-space:nowrap}
 button{font:inherit;cursor:pointer}
 button:focus-visible{outline:2px solid rgba(255,255,255,.45);outline-offset:1px}
 button:disabled{cursor:default;opacity:.4}
-.panel{position:fixed;pointer-events:auto;width:366px;max-width:calc(100vw - 16px);background:#18181b;border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,.5);overflow:hidden}
+.panel.sent button:disabled{opacity:1}
+.panel{position:fixed;pointer-events:auto;width:366px;max-width:calc(100vw - 16px);background:#18181b;border:1px solid rgba(255,255,255,.1);border-radius:16px;box-shadow:0 25px 50px -12px rgba(0,0,0,.5);overflow:hidden;transition:opacity 160ms cubic-bezier(.2,.8,.2,1),transform 160ms cubic-bezier(.2,.8,.2,1)}
+.panel.faded{opacity:0;transform:scale(.97)}
+@media (prefers-reduced-motion:reduce){.panel{transition:none}}
 .hd{display:flex;align-items:center;gap:8px;height:38px;padding:0 6px 0 12px;background:rgba(24,24,27,.8);border-bottom:1px solid rgba(255,255,255,.05);cursor:grab;color:#52525b;user-select:none;touch-action:none}
 .hd.dragging{cursor:grabbing}
 .hd h2{margin:0;font:700 11px Inter,system-ui,sans-serif;letter-spacing:.06em;text-transform:uppercase;color:#fff}
@@ -111,10 +116,6 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
 .pop .sn{padding:4px 4px 2px;font:400 12px/1.5 Inter,system-ui,sans-serif;color:#a1a1aa}
 .pop .sn b{display:block;color:#e4e4e7;font-weight:500;margin-bottom:2px}
 .pop .excerpt{margin-top:4px;color:#71717a}
-.toast{position:fixed;right:20px;bottom:20px;pointer-events:auto;display:flex;align-items:center;gap:8px;padding:10px 14px;background:#18181b;border:1px solid rgba(255,255,255,.1);border-radius:12px;box-shadow:0 12px 30px rgba(0,0,0,.4);color:#e4e4e7}
-.toast svg{color:#a5b4fc}
-.toast.bug svg{color:#f87171}
-@media (max-width:420px){.toast{right:12px;left:12px;bottom:12px}}
 `;
   const host = document.createElement('terrific-composer');
   // Init scripts can run before <html> exists; the Alt+right-click handler attaches the host on demand.
@@ -216,8 +217,9 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     h('div', { class: 'ft' }, [idle, pointingHint]),
   );
   const pop = h('div', { class: 'pop', hidden: '' });
-  const toast = h('div', { class: 'toast', role: 'status', 'aria-live': 'polite', hidden: '' });
-  layer.append(ref, hl, panel, pop, toast);
+  // Screen-reader-only confirmation; the visible feedback is the button turning into "Saved".
+  const status = h('span', { class: 'sr', role: 'status', 'aria-live': 'polite' });
+  layer.append(ref, hl, panel, pop, status);
   root.append(layer);
   type Chip =
     | { kind: 'element'; el: Element | null; selector: string; name: string; tag: string }
@@ -265,7 +267,31 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
   let dirty = false;
   let restoring = false;
   let saveTimer: ReturnType<typeof setTimeout> | undefined;
-  let toastTimer: ReturnType<typeof setTimeout> | undefined;
+  // Set between a successful submit and the editor being cleared, so no save can resurrect a sent draft.
+  let sealed = false;
+  let closeTimer: ReturnType<typeof setTimeout> | undefined;
+  const FADE_MS = 170;
+  const wait = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+  const reducedMotion = () =>
+    typeof matchMedia === 'function' && matchMedia('(prefers-reduced-motion: reduce)').matches;
+  function animateIn() {
+    if (reducedMotion()) return;
+    panel.classList.add('faded');
+    // Commit the faded state before removing it so the transition runs.
+    void panel.offsetWidth;
+    panel.classList.remove('faded');
+  }
+  async function fadeOut() {
+    if (panel.hidden || reducedMotion()) return;
+    panel.classList.add('faded');
+    await wait(FADE_MS);
+  }
+  function cancelClose() {
+    if (closeTimer === undefined) return;
+    clearTimeout(closeTimer);
+    closeTimer = undefined;
+    panel.classList.remove('faded');
+  }
   const selection = () =>
     'getSelection' in root && typeof root.getSelection === 'function'
       ? (root.getSelection as () => Selection | null)()
@@ -681,7 +707,6 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     try {
       let chip: HTMLElement;
       if (kind === 'screenshot') {
-        layer.classList.add('capturing');
         let res: {
           file: string;
           width: number;
@@ -690,10 +715,14 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
           label: string;
         };
         try {
+          // Fade out, then hide outright so a half-transparent panel never lands in the image.
+          await fadeOut();
+          layer.classList.add('capturing');
           await frame();
           res = await bridge('screenshot');
         } finally {
           layer.classList.remove('capturing');
+          panel.classList.remove('faded');
         }
         chip = makeChip(
           {
@@ -850,12 +879,12 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     saveTimer = undefined;
   }
   function saveDraftNow() {
-    if (restoring) return;
+    if (restoring || sealed) return;
     cancelPendingSave();
     void bridge('saveDraft', buildDraft()).catch(() => {});
   }
   function scheduleSave() {
-    if (restoring) return;
+    if (restoring || sealed) return;
     cancelPendingSave();
     saveTimer = setTimeout(() => {
       saveTimer = undefined;
@@ -960,25 +989,25 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     stopPoint();
     panel.hidden = false;
     placeAt(draft.position);
+    animateIn();
   }
   function close() {
     stopPoint();
     hidePreview();
     hideError();
-    panel.hidden = true;
-    saveDraftNow();
-  }
-  function showToast(kind: 'note' | 'bug') {
-    toast.className = `toast${kind === 'bug' ? ' bug' : ''}`;
-    toast.replaceChildren(
-      svg(kind === 'bug' ? icons.bug : icons.msg),
-      h('span', {}, [`${kind === 'bug' ? 'Bug' : 'Note'} saved to the session`]),
-    );
-    toast.hidden = false;
-    clearTimeout(toastTimer);
-    toastTimer = setTimeout(() => {
-      toast.hidden = true;
-    }, 2600);
+    if (panel.hidden || closeTimer !== undefined) return;
+    const finish = () => {
+      closeTimer = undefined;
+      panel.hidden = true;
+      panel.classList.remove('faded');
+      saveDraftNow();
+    };
+    if (reducedMotion()) {
+      finish();
+      return;
+    }
+    panel.classList.add('faded');
+    closeTimer = setTimeout(finish, FADE_MS);
   }
   async function send(kind: 'note' | 'bug') {
     if (busy || (kind === 'note' && !hasContent())) return;
@@ -994,20 +1023,35 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     busy = true;
     update();
     btn.text.textContent = 'Saving…';
+    const icon = btn.el.firstElementChild;
+    const label = kind === 'bug' ? 'Bug' : 'Note';
     try {
       await bridge('submit', { kind, text: text || null });
+      // The session already cleared its copy; keep the sent text on screen only for the confirmation.
+      sealed = true;
+      dirty = false;
+      panel.classList.add('sent');
+      btn.text.textContent = 'Saved';
+      icon?.replaceWith(svg(icons.check));
+      status.textContent = `${label} saved`;
+      await wait(reducedMotion() ? 300 : 450);
+      close();
+      await wait(reducedMotion() ? 0 : FADE_MS + 10);
       ed.replaceChildren();
       savedRange = null;
-      dirty = false;
-      close();
-      showToast(kind);
+      sealed = false;
+      saveDraftNow();
     } catch (error) {
       showError(
         `Not saved: ${error instanceof Error ? error.message : String(error)} Your draft is kept.`,
       );
     } finally {
+      sealed = false;
       busy = false;
-      btn.text.textContent = kind === 'bug' ? 'Bug' : 'Note';
+      panel.classList.remove('sent');
+      btn.text.textContent = label;
+      const current = btn.el.firstElementChild;
+      if (icon && current !== icon) current?.replaceWith(icon);
       update();
     }
   }
@@ -1028,7 +1072,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     }
   });
   function flushSave() {
-    if (restoring) return;
+    if (restoring || sealed) return;
     cancelPendingSave();
     const fn = w[bindingName];
     if (typeof fn !== 'function') return;
@@ -1061,6 +1105,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
         await boot;
         if (!host.isConnected) document.documentElement.append(host);
         if (pointing) stopPoint();
+        cancelClose();
         const wasOpen = !panel.hidden;
         if (!wasOpen) {
           const draft = await loadAndApplyDraft();
@@ -1073,6 +1118,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
             placeAt(draft.position);
           }
           keepInView();
+          animateIn();
           saveDraftNow();
         }
         ed.focus({ preventScroll: true });

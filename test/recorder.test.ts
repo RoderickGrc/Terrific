@@ -697,7 +697,8 @@ test('composer Esc close keeps draft hidden across reload until reopened', {
     await page.locator('terrific-composer .ed').click();
     await page.keyboard.type('closed draft text');
     await page.keyboard.press('Escape');
-    equal(await page.locator('terrific-composer .panel').isVisible(), false);
+    // The panel fades out before it is hidden.
+    await page.locator('terrific-composer .panel').waitFor({ state: 'hidden' });
 
     await page.reload({ waitUntil: 'domcontentloaded' });
     await page.locator('h1').waitFor();
