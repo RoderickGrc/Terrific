@@ -524,3 +524,237 @@ test('composer stores an empty bug with null text', {
     await site.close();
   }
 });
+
+test('composer draft survives reload with chips and without stealing focus', {
+  timeout: 60_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: false, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await page.locator('#email').waitFor();
+    await openComposer(page);
+    await page.locator('terrific-composer .ed').click();
+    await page.keyboard.type('draft survives reload');
+    await page.locator('terrific-composer .tl', { hasText: 'Point' }).click();
+    await page.locator('#email').click();
+    await page.locator('terrific-composer .tl', { hasText: 'Screenshot' }).click();
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'screenshot'));
+    equal(await page.locator('terrific-composer .ch.el').count(), 1);
+    equal(await page.locator('terrific-composer .ch.cap').count(), 1);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('terrific-composer .panel').waitFor({ state: 'visible' });
+    match(
+      (await page.locator('terrific-composer .ed').textContent()) ?? '',
+      /draft survives reload/,
+    );
+    equal(await page.locator('terrific-composer .ch.el').count(), 1);
+    equal(await page.locator('terrific-composer .ch.cap').count(), 1);
+    equal(
+      await page.evaluate(() => document.activeElement?.localName === 'terrific-composer'),
+      false,
+    );
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});
+
+test('composer draft survives navigation and marks missing element chips gone', {
+  timeout: 60_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: false, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await page.locator('#email').waitFor();
+    await openComposer(page);
+    await page.locator('terrific-composer .ed').click();
+    await page.keyboard.type('draft on page two');
+    await page.locator('terrific-composer .tl', { hasText: 'Point' }).click();
+    await page.locator('#email').click();
+    await page.locator('terrific-composer .tl', { hasText: 'Screenshot' }).click();
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'screenshot'));
+
+    await page.goto(`${site.url}/page2.html`, { waitUntil: 'domcontentloaded' });
+    await page.locator('terrific-composer .panel').waitFor({ state: 'visible' });
+    match((await page.locator('terrific-composer .ed').textContent()) ?? '', /draft on page two/);
+    equal(await page.locator('terrific-composer .ch.el').count(), 1);
+    equal(await page.locator('terrific-composer .ch.el.gone').count(), 1);
+    equal(await page.locator('terrific-composer .ch.cap').count(), 1);
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});
+
+test('composer submit after reload clears the draft for the next open', {
+  timeout: 60_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: false, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await page.locator('#email').waitFor();
+    await openComposer(page);
+    await page.locator('terrific-composer .ed').click();
+    await page.keyboard.type('submit after reload');
+    await page.locator('terrific-composer .tl', { hasText: 'Point' }).click();
+    await page.locator('#email').click();
+    await page.locator('terrific-composer .tl', { hasText: 'Screenshot' }).click();
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'screenshot'));
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('terrific-composer .panel').waitFor({ state: 'visible' });
+    await page.locator('terrific-composer .ed').click();
+    await page.keyboard.press('Control+Enter');
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'note'));
+    const notes = collected.events.filter((event) => event.kind === 'note');
+    equal(notes.length, 1);
+    if (notes[0]?.kind === 'note') {
+      match(notes[0].text, /submit after reload/);
+      match(notes[0].text, /\[element /);
+      match(notes[0].text, /\[screenshot screenshots\/ss_/);
+    }
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('h1').waitFor();
+    equal(await page.locator('terrific-composer .panel').isVisible(), false);
+    await openComposer(page);
+    equal((await page.locator('terrific-composer .ed').textContent())?.trim(), '');
+    equal(await page.locator('terrific-composer .ch').count(), 0);
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});
+
+test('composer Esc close keeps draft hidden across reload until reopened', {
+  timeout: 60_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: false, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await openComposer(page);
+    await page.locator('terrific-composer .ed').click();
+    await page.keyboard.type('closed draft text');
+    await page.keyboard.press('Escape');
+    equal(await page.locator('terrific-composer .panel').isVisible(), false);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('h1').waitFor();
+    equal(await page.locator('terrific-composer .panel').isVisible(), false);
+    await openComposer(page);
+    match((await page.locator('terrific-composer .ed').textContent()) ?? '', /closed draft text/);
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});
+
+test('composer screenshot labels continue across reload', {
+  timeout: 60_000,
+}, async (t) => {
+  const browser = firstBrowser(t);
+  if (browser === undefined) return;
+
+  const site = await serveSite();
+  const screenshotsDir = await mkdtemp(join(tmpdir(), 'terrific-shots-'));
+  tempDirs.push(screenshotsDir);
+  const collected = collectEvents();
+  const recording = await startRecording({
+    browser: { executablePath: browser.executablePath, userDataDir: null, headless: true },
+    url: `${site.url}/`,
+    record: { actions: false, network: false, console: false },
+    screenshotsDir,
+    random: (n) => randomBytes(n),
+    onEvent: collected.onEvent,
+    appendEvent: collected.appendEvent,
+  });
+  try {
+    const page = recording.page;
+    await openComposer(page);
+    await page.locator('terrific-composer .tl', { hasText: 'Screenshot' }).click();
+    await waitFor(collected.events, (seen) => seen.some((event) => event.kind === 'screenshot'));
+    match((await page.locator('terrific-composer .ch.cap').textContent()) ?? '', /Screenshot 1/);
+
+    await page.reload({ waitUntil: 'domcontentloaded' });
+    await page.locator('terrific-composer .panel').waitFor({ state: 'visible' });
+    match((await page.locator('terrific-composer .ch.cap').textContent()) ?? '', /Screenshot 1/);
+    await page.locator('terrific-composer .tl', { hasText: 'Screenshot' }).click();
+    await waitFor(
+      collected.events,
+      (seen) => seen.filter((event) => event.kind === 'screenshot').length >= 2,
+    );
+    const labels = await page.locator('terrific-composer .ch.cap').allTextContents();
+    equal(
+      labels.some((label) => /Screenshot 1/.test(label)),
+      true,
+    );
+    equal(
+      labels.some((label) => /Screenshot 2/.test(label)),
+      true,
+    );
+  } finally {
+    await recording.stop();
+    await site.close();
+  }
+});

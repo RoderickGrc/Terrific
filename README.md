@@ -56,7 +56,7 @@ Run `terrific doctor` if setup fails. It checks Node.js, browser discovery, prof
 
 1. Type `/new localhost:5173 "checkout"` in the TUI and confirm the recording setup.
 2. Reproduce the issue in the browser Terrific opens. Actions, requests, and console events appear in the live log.
-3. Type a note, or use `/bug` and `/flag` to mark a moment. Use `/screenshot` or `/snapshot` to capture the page. In the browser, hold Alt and right-click to open the note composer.
+3. Type a note, or use `/bug` and `/flag` to mark a moment. Use `/screenshot` or `/snapshot` to capture the page. In the browser, hold Alt and right-click to open the note panel.
 4. Run `/stop` and confirm. The summary shows bugs, errors, failed requests, and the saved session location.
 5. Run `/copy` to copy the agent prompt, bugs and errors, or full context.
 

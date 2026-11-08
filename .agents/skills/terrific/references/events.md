@@ -50,12 +50,12 @@ The session folder, printed by `start` and `prompt`, contains:
 
 ## Notes written in the browser
 
-In any browser Terrific records, hold Alt and right-click to open the composer (plain right-click is untouched; works when action recording is off; top frame only). Point adds the clicked element as a chip (Up/Down change level, Enter or click to add, Esc cancels). Screenshot and Snapshot capture the page into the session and add a chip. Note saves with Ctrl+Enter, Bug with Ctrl+Shift+Enter; a bug can be empty. Esc closes and keeps the draft until the page navigates or reloads.
+In any browser Terrific records, hold Alt and right-click to open the Note panel (plain right-click is untouched; works when action recording is off; top frame only). Point adds the clicked element as a chip (Up/Down change level, Enter or click to add, Esc cancels). Screenshot and Snapshot capture the page into the session and add a chip. Note saves with Ctrl+Enter, Bug with Ctrl+Shift+Enter; a bug can be empty. Esc closes and keeps the draft.
 
-Composer notes and bugs are stored as normal `note` / `bug` events with `author: 'tester'`. Chips serialize into the event text as:
+Note panel notes and bugs are stored as normal `note` / `bug` events with `author: 'tester'`. Chips serialize into the event text as:
 
 - `[element SELECTOR "NAME"]` (name optional): use the CSS selector to locate the element in the page or app code.
 - `[screenshot screenshots/ss_<id>.png]`: path relative to the session folder; open that file under `screenshots/`.
 - `[snapshot ev_<id>]`: id of the `snapshot` event in `events.jsonl` (or `[snapshot]` when no id was available). Read with `terrific events <session-id> --type snapshot --json` and match the record whose `id` is that `ev_<id>`.
 
-Limitations: the draft is lost on navigation or reload; screenshot previews can be blocked by a page's image CSP (the chip still works); iframes and closed shadow roots cannot be pointed into from the top frame.
+Limitations: the draft (unsent text and chips) lives in memory for the whole session, survives reloads, navigation and new tabs, and is discarded when the session stops; nothing is written to disk until it is sent. Screenshot previews can be blocked by a page's image CSP (the chip still works); iframes and closed shadow roots cannot be pointed into from the top frame.

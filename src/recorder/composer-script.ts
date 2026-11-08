@@ -76,6 +76,7 @@ button:disabled{cursor:default;opacity:.4}
 .ch.el{background:rgba(99,102,241,.15);border:1px solid rgba(99,102,241,.1);color:#a5b4fc}
 .ch.cap{background:rgba(255,255,255,.06);border:1px solid rgba(255,255,255,.1);color:#e4e4e7;font-family:Inter,system-ui,sans-serif}
 .ch.cap svg{color:#22d3ee}
+.ch.gone{opacity:.45;border-style:dashed}
 .ch:hover{filter:brightness(1.25)}
 .ch .rm{display:none;width:14px;height:14px;margin:0 -2px 0 1px;border:0;padding:0;border-radius:3px;background:transparent;color:inherit;place-items:center}
 .ch:hover .rm{display:inline-grid}
@@ -219,7 +220,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
   layer.append(ref, hl, panel, pop, toast);
   root.append(layer);
   type Chip =
-    | { kind: 'element'; el: Element; selector: string; name: string }
+    | { kind: 'element'; el: Element | null; selector: string; name: string; tag: string }
     | {
         kind: 'screenshot';
         label: string;
@@ -236,11 +237,34 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
         wordCount: number;
         excerpt: string;
       };
+  type DraftSegment =
+    | { type: 'text'; text: string }
+    | { type: 'element'; selector: string; name: string; tag: string }
+    | { type: 'screenshot'; label: string; file: string; width: number; height: number }
+    | {
+        type: 'snapshot';
+        label: string;
+        id: string | null;
+        title: string;
+        wordCount: number;
+        excerpt: string;
+      };
+  type Draft = {
+    open: boolean;
+    position: { left: number; top: number } | null;
+    moved: boolean;
+    segments: DraftSegment[];
+  };
+  type DraftWithPreviews = Omit<Draft, 'segments'> & {
+    segments: (DraftSegment & { preview?: string | null })[];
+  };
   const chipData = new WeakMap<Element, Chip>();
-  const counters = { screenshot: 0, snapshot: 0 };
   let savedRange: Range | null = null;
   let busy = false;
   let moved = false;
+  let dirty = false;
+  let restoring = false;
+  let saveTimer: ReturnType<typeof setTimeout> | undefined;
   let toastTimer: ReturnType<typeof setTimeout> | undefined;
   const selection = () =>
     'getSelection' in root && typeof root.getSelection === 'function'
@@ -331,6 +355,25 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
       ? !/\s$/.test((prev as Text).data)
       : prev.nodeName !== 'BR';
   }
+  function resolveElement(selector: string): Element | null {
+    try {
+      const found = document.querySelector(selector);
+      if (!found || found === host || host.contains(found)) return null;
+      return found;
+    } catch {
+      return null;
+    }
+  }
+  function decorateElementChip(chip: HTMLElement, data: Extract<Chip, { kind: 'element' }>) {
+    data.el = resolveElement(data.selector);
+    if (data.el) {
+      chip.classList.remove('gone');
+      chip.title = data.selector;
+    } else {
+      chip.classList.add('gone');
+      chip.title = `${data.selector} (not on this page)`;
+    }
+  }
   function insertChip(chip: HTMLElement) {
     ed.focus({ preventScroll: true });
     const r = rangeInEditor();
@@ -345,6 +388,8 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     caret.collapse(true);
     placeCaret(caret);
     update();
+    dirty = true;
+    saveDraftNow();
   }
   function makeChip(data: Chip, label: string, icon?: string[]) {
     const chip = h('span', {
@@ -359,16 +404,16 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
       ]),
     );
     chipData.set(chip, data);
+    if (data.kind === 'element') decorateElementChip(chip, data);
     return chip;
   }
   function addElement(el: Element | null) {
     if (!usable(el)) return;
     const selector = selectorFor(el);
     const chip = makeChip(
-      { kind: 'element', el, selector, name: accessibleName(el) },
+      { kind: 'element', el, selector, name: accessibleName(el), tag: el.localName },
       `<${el.localName}>`,
     );
-    chip.title = selector;
     insertChip(chip);
   }
   document.addEventListener('selectionchange', () => {
@@ -379,6 +424,8 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
   ed.addEventListener('input', () => {
     hideError();
     update();
+    dirty = true;
+    scheduleSave();
   });
   ed.addEventListener('paste', (e) => {
     e.preventDefault();
@@ -397,6 +444,8 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     hidePreview();
     update();
     ed.focus();
+    dirty = true;
+    saveDraftNow();
   });
   let pointing = false,
     chain: Element[] = [],
@@ -549,6 +598,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
       hd.removeEventListener('pointermove', move);
       hd.removeEventListener('pointerup', up);
       hd.removeEventListener('pointercancel', up);
+      saveDraftNow();
     };
     hd.addEventListener('pointermove', move);
     hd.addEventListener('pointerup', up);
@@ -565,7 +615,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     const data = chipData.get(chip);
     if (!data) return;
     if (data.kind === 'element') {
-      if (!data.el.isConnected) return;
+      if (!data.el?.isConnected) return;
       const r = data.el.getBoundingClientRect();
       Object.assign(ref.style, {
         left: `${r.left - 3}px`,
@@ -624,7 +674,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     hideError();
     hidePreview();
     const btn = kind === 'screenshot' ? shot : snap,
-      label = btn.text.textContent;
+      buttonLabel = btn.text.textContent;
     busy = true;
     update();
     btn.text.textContent = kind === 'screenshot' ? 'Capturing…' : 'Reading page…';
@@ -632,24 +682,51 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
       let chip: HTMLElement;
       if (kind === 'screenshot') {
         layer.classList.add('capturing');
-        let res: { file: string; width: number; height: number; preview: string | null };
+        let res: {
+          file: string;
+          width: number;
+          height: number;
+          preview: string | null;
+          label: string;
+        };
         try {
           await frame();
           res = await bridge('screenshot');
         } finally {
           layer.classList.remove('capturing');
         }
-        const name = `Screenshot ${++counters.screenshot}`;
-        chip = makeChip({ kind: 'screenshot', label: name, ...res }, name, icons.cam);
+        chip = makeChip(
+          {
+            kind: 'screenshot',
+            label: res.label,
+            file: res.file,
+            width: res.width,
+            height: res.height,
+            preview: res.preview,
+          },
+          res.label,
+          icons.cam,
+        );
       } else {
         const res = await bridge<{
           id: string | null;
           title: string;
           wordCount: number;
           excerpt: string;
+          label: string;
         }>('snapshot');
-        const name = `Snapshot ${++counters.snapshot}`;
-        chip = makeChip({ kind: 'snapshot', label: name, ...res }, name, icons.scan);
+        chip = makeChip(
+          {
+            kind: 'snapshot',
+            label: res.label,
+            id: res.id,
+            title: res.title,
+            wordCount: res.wordCount,
+            excerpt: res.excerpt,
+          },
+          res.label,
+          icons.scan,
+        );
       }
       busy = false;
       insertChip(chip);
@@ -659,7 +736,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
       );
     } finally {
       busy = false;
-      btn.text.textContent = label;
+      btn.text.textContent = buttonLabel;
       update();
     }
   }
@@ -691,11 +768,205 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
   function hideError() {
     err.hidden = true;
   }
+  function currentPosition(): { left: number; top: number } | null {
+    const left = panel.style.left;
+    const top = panel.style.top;
+    if (!left || !top) return null;
+    const leftN = Number.parseFloat(left);
+    const topN = Number.parseFloat(top);
+    if (!Number.isFinite(leftN) || !Number.isFinite(topN)) return null;
+    return { left: leftN, top: topN };
+  }
+  function buildSegments(): DraftSegment[] {
+    const segments: DraftSegment[] = [];
+    let text = '';
+    const flush = () => {
+      if (text === '') return;
+      segments.push({ type: 'text', text });
+      text = '';
+    };
+    const walk = (node: Node) => {
+      for (const n of node.childNodes) {
+        if (n.nodeType === Node.TEXT_NODE) {
+          text += (n as Text).data;
+          continue;
+        }
+        if (n.nodeName === 'BR') {
+          text += '\n';
+          continue;
+        }
+        if (n instanceof Element && n.classList.contains('ch')) {
+          flush();
+          const d = chipData.get(n);
+          if (!d) continue;
+          if (d.kind === 'element') {
+            segments.push({
+              type: 'element',
+              selector: d.selector,
+              name: d.name,
+              tag: d.tag,
+            });
+          } else if (d.kind === 'screenshot') {
+            segments.push({
+              type: 'screenshot',
+              label: d.label,
+              file: d.file,
+              width: d.width,
+              height: d.height,
+            });
+          } else {
+            segments.push({
+              type: 'snapshot',
+              label: d.label,
+              id: d.id,
+              title: d.title,
+              wordCount: d.wordCount,
+              excerpt: d.excerpt,
+            });
+          }
+          continue;
+        }
+        if (n instanceof Element) {
+          if (n.nodeName === 'DIV' && text && !text.endsWith('\n')) text += '\n';
+          walk(n);
+        }
+      }
+    };
+    walk(ed);
+    flush();
+    return segments;
+  }
+  function buildDraft(): Draft {
+    return {
+      open: !panel.hidden,
+      position: currentPosition(),
+      moved,
+      segments: buildSegments(),
+    };
+  }
+  function cancelPendingSave() {
+    if (saveTimer === undefined) return;
+    clearTimeout(saveTimer);
+    saveTimer = undefined;
+  }
+  function saveDraftNow() {
+    if (restoring) return;
+    cancelPendingSave();
+    void bridge('saveDraft', buildDraft()).catch(() => {});
+  }
+  function scheduleSave() {
+    if (restoring) return;
+    cancelPendingSave();
+    saveTimer = setTimeout(() => {
+      saveTimer = undefined;
+      saveDraftNow();
+    }, 300);
+  }
+  function placeDefault() {
+    const r = panel.getBoundingClientRect();
+    panel.style.left = `${clamp(innerWidth - r.width - 20, 8, Math.max(8, innerWidth - r.width - 8))}px`;
+    panel.style.top = `${clamp(innerHeight - r.height - 20, 8, Math.max(8, innerHeight - r.height - 8))}px`;
+  }
+  function placeAt(position: { left: number; top: number } | null) {
+    if (position) {
+      panel.style.left = `${position.left}px`;
+      panel.style.top = `${position.top}px`;
+    } else {
+      placeDefault();
+    }
+    keepInView();
+  }
+  function appendTextSegment(value: string) {
+    const parts = value.split('\n');
+    for (let i = 0; i < parts.length; i++) {
+      if (i > 0) ed.append(document.createElement('br'));
+      const part = parts[i];
+      if (part) ed.append(part);
+    }
+  }
+  function applyDraft(draft: DraftWithPreviews) {
+    ed.replaceChildren();
+    savedRange = null;
+    for (const segment of draft.segments) {
+      if (segment.type === 'text') {
+        appendTextSegment(segment.text);
+        continue;
+      }
+      if (segment.type === 'element') {
+        const chip = makeChip(
+          {
+            kind: 'element',
+            el: null,
+            selector: segment.selector,
+            name: segment.name,
+            tag: segment.tag,
+          },
+          `<${segment.tag}>`,
+        );
+        ed.append(chip, document.createTextNode(' '));
+        continue;
+      }
+      if (segment.type === 'screenshot') {
+        const chip = makeChip(
+          {
+            kind: 'screenshot',
+            label: segment.label,
+            file: segment.file,
+            width: segment.width,
+            height: segment.height,
+            preview: segment.preview ?? null,
+          },
+          segment.label,
+          icons.cam,
+        );
+        ed.append(chip, document.createTextNode(' '));
+        continue;
+      }
+      const chip = makeChip(
+        {
+          kind: 'snapshot',
+          label: segment.label,
+          id: segment.id,
+          title: segment.title,
+          wordCount: segment.wordCount,
+          excerpt: segment.excerpt,
+        },
+        segment.label,
+        icons.scan,
+      );
+      ed.append(chip, document.createTextNode(' '));
+    }
+    moved = draft.moved;
+    update();
+  }
+  async function loadAndApplyDraft(): Promise<DraftWithPreviews | null> {
+    if (dirty) return null;
+    const fn = w[bindingName];
+    if (typeof fn !== 'function') return null;
+    restoring = true;
+    try {
+      const result = (await bridge('loadDraft')) as { draft: DraftWithPreviews | null };
+      if (dirty || !result.draft) return result.draft;
+      applyDraft(result.draft);
+      return result.draft;
+    } catch {
+      return null;
+    } finally {
+      restoring = false;
+    }
+  }
+  function showPanelFromDraft(draft: DraftWithPreviews) {
+    if (!host.isConnected) document.documentElement.append(host);
+    stopPoint();
+    panel.hidden = false;
+    placeAt(draft.position);
+  }
   function close() {
     stopPoint();
     hidePreview();
     hideError();
     panel.hidden = true;
+    saveDraftNow();
   }
   function showToast(kind: 'note' | 'bug') {
     toast.className = `toast${kind === 'bug' ? ' bug' : ''}`;
@@ -714,6 +985,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
     stopPoint();
     hideError();
     hidePreview();
+    cancelPendingSave();
     const btn = kind === 'bug' ? bug : note;
     const text = serialize()
       .replace(/[ \t]+\n/g, '\n')
@@ -726,6 +998,7 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
       await bridge('submit', { kind, text: text || null });
       ed.replaceChildren();
       savedRange = null;
+      dirty = false;
       close();
       showToast(kind);
     } catch (error) {
@@ -754,25 +1027,57 @@ kbd{font:500 10px "JetBrains Mono",Consolas,monospace;color:#71717a;border:1px s
       close();
     }
   });
+  function flushSave() {
+    if (restoring) return;
+    cancelPendingSave();
+    const fn = w[bindingName];
+    if (typeof fn !== 'function') return;
+    void bridge('saveDraft', buildDraft()).catch(() => {});
+  }
+  window.addEventListener('pagehide', flushSave);
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'hidden') flushSave();
+  });
   update();
+  const boot = (async () => {
+    const ready =
+      document.readyState !== 'loading'
+        ? Promise.resolve()
+        : new Promise<void>((resolve) => {
+            document.addEventListener('DOMContentLoaded', () => resolve(), { once: true });
+          });
+    await ready;
+    const draft = await loadAndApplyDraft();
+    if (!draft?.open) return;
+    showPanelFromDraft(draft);
+  })();
   window.addEventListener(
     'contextmenu',
     (e) => {
       if (!e.altKey || isOurs(e)) return;
       e.preventDefault();
       e.stopImmediatePropagation();
-      if (!host.isConnected) document.documentElement.append(host);
-      if (pointing) stopPoint();
-      const wasOpen = !panel.hidden;
-      panel.hidden = false;
-      if (!wasOpen && !moved) {
-        const r = panel.getBoundingClientRect();
-        panel.style.left = `${clamp(e.clientX + 12, 8, Math.max(8, innerWidth - r.width - 8))}px`;
-        panel.style.top = `${e.clientY + 12 + r.height <= innerHeight - 8 ? e.clientY + 12 : clamp(e.clientY - r.height - 12, 8, Math.max(8, innerHeight - r.height - 8))}px`;
-      }
-      keepInView();
-      ed.focus({ preventScroll: true });
-      placeCaret(rangeInEditor());
+      void (async () => {
+        await boot;
+        if (!host.isConnected) document.documentElement.append(host);
+        if (pointing) stopPoint();
+        const wasOpen = !panel.hidden;
+        if (!wasOpen) {
+          const draft = await loadAndApplyDraft();
+          panel.hidden = false;
+          if (!moved) {
+            const r = panel.getBoundingClientRect();
+            panel.style.left = `${clamp(e.clientX + 12, 8, Math.max(8, innerWidth - r.width - 8))}px`;
+            panel.style.top = `${e.clientY + 12 + r.height <= innerHeight - 8 ? e.clientY + 12 : clamp(e.clientY - r.height - 12, 8, Math.max(8, innerHeight - r.height - 8))}px`;
+          } else if (draft?.position) {
+            placeAt(draft.position);
+          }
+          keepInView();
+          saveDraftNow();
+        }
+        ed.focus({ preventScroll: true });
+        placeCaret(rangeInEditor());
+      })();
     },
     true,
   );
